@@ -1,39 +1,51 @@
 <!DOCTYPE html>
-<html lang="es" data-static="1">
+<html lang="es" data-theme="dark" data-static="1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    /* Tema e idioma antes de pintar: sin parpadeo */
+    (function () {
+      var d = document.documentElement, t = null, l = null;
+      try { t = localStorage.getItem('radar-theme'); l = localStorage.getItem('radar-lang'); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      if (l !== 'es' && l !== 'en') l = /^es\b/i.test(navigator.language || '') ? 'es' : 'en';
+      d.dataset.theme = t;
+      if (l !== 'es') { d.lang = l; d.classList.add('i18n-pending'); setTimeout(function () { d.classList.remove('i18n-pending'); }, 1500); }
+    })();
+  </script>
   <meta name="theme-color" content="#06080b">
-  <meta name="description" content="Rastreo en tiempo real del tráfico aéreo sobre Latinoamérica con datos de OpenSky Network.">
-  <title>Estadísticas · Radar Latam</title>
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Rastreo en tiempo real del tráfico aéreo sobre Latinoamérica con datos de OpenSky Network. Real-time air traffic over Latin America.">
+  <title data-i18n-key="st.title">Estadísticas · Radar Latam</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%2306080b' stroke='%23f5a524' stroke-width='1.5'/%3E%3Cpath d='M12 12L12 2A10 10 0 0 1 21 8z' fill='%23f5a524'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://unpkg.com">
-  <link rel="preconnect" href="https://server.arcgisonline.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
 
   <link rel="stylesheet" href="static/css/app.css">
   
 <style>
   .summary { margin-bottom: 20px; }
-  .summary .kpi { padding: 20px 24px; }
-  .summary .kpi-value { font-size: 36px; }
-  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 20px; }
+  .summary .kpi { padding: 22px 26px; }
+  .summary .kpi-value { font-size: 40px; margin-top: 10px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 410px; gap: 20px; }
   .map-panel { overflow: hidden; display: flex; flex-direction: column; }
-  .map-panel .map { height: 560px; }
-  .rank { list-style: none; margin: 0; padding: 8px; counter-reset: r; }
+  .map-panel .map-box { position: relative; height: 580px; }
+  .rank { list-style: none; margin: 0; padding: 8px; }
   .rank button {
     width: 100%;
-    display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
-    padding: 12px; border: 0; border-radius: var(--r-sm); background: none;
+    display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 6px 12px; align-items: center;
+    padding: 12px; border: 1px solid transparent; border-radius: var(--r-sm); background: none;
     text-align: left; cursor: pointer;
-    transition: background-color .12s var(--ease);
+    transition: background-color .15s var(--ease), transform .2s var(--ease), border-color .2s var(--ease), box-shadow .2s var(--ease);
   }
-  .rank button:hover { background: var(--surface-2); }
-  .rank button[aria-pressed="true"] { background: var(--accent-soft); }
+  .rank button:hover { background: var(--surface-2); transform: translateY(-2px); border-color: var(--line); box-shadow: var(--shadow-2); }
+  .rank button[aria-pressed="true"] { background: var(--accent-soft); border-color: transparent; }
   .rank .pos { font: 600 13px/1 var(--font-mono); color: var(--ink-3); }
   .rank .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rank .val { font: 500 14px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -41,56 +53,67 @@
   .bar { grid-column: 2 / 4; height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
   .bar span {
     display: block; height: 100%; border-radius: 2px; background: var(--ink-3);
-    transform-origin: left; animation: grow .8s var(--ease) both;
-    transition: background-color .15s var(--ease);
+    transform-origin: left; animation: grow .9s var(--ease) both;
+    transition: background-color .2s var(--ease);
   }
   .rank li:first-child .bar span, .rank button[aria-pressed="true"] .bar span { background: var(--accent); }
-  .rank button:hover .bar span { background: var(--ink-2); }
   @keyframes grow { from { transform: scaleX(0); } }
 
-  .bubble-label {
-    background: none; border: 0; box-shadow: none; padding: 0;
-    font: 600 11px/1 var(--font-mono); color: var(--ink);
-    text-shadow: 0 0 4px #000, 0 0 2px #000;
+  .col-label {
+    font: 600 11px/1 var(--font-mono); letter-spacing: .04em;
+    color: var(--ink); background: var(--glass);
+    border: 1px solid var(--line-strong); border-radius: var(--r-pill);
+    padding: 5px 9px; white-space: nowrap; pointer-events: none;
+    box-shadow: var(--shadow-1);
   }
-  .bubble-label::before { display: none; }
 
-  @media (max-width: 1040px) {
+  @media (max-width: 1080px) {
     .grid { grid-template-columns: 1fr; }
-    .map-panel .map { height: 420px; }
+    .map-panel .map-box { height: 460px; }
   }
   @media (max-width: 600px) {
     .summary .kpis { grid-template-columns: 1fr; }
     .summary .kpi + .kpi { border-left: 0; border-top: 1px solid var(--line); }
-    .summary .kpi-value { font-size: 28px; }
+    .summary .kpi-value { font-size: 30px; }
+    .map-panel .map-box { height: 380px; }
   }
 </style>
 
 </head>
 <body>
-  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <a class="skip-link" href="#main" data-i18n="skip">Saltar al contenido</a>
 
   <header class="topbar">
-    <a class="brand" href="index.html" aria-label="Radar Latam, inicio">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="10.5" stroke="#2a3440"/>
-        <circle cx="12" cy="12" r="6" stroke="#2a3440"/>
+    <a class="brand" href="index.html" translate="no" data-i18n-aria="brand.aria" aria-label="Radar Latam, inicio">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10.5" stroke="var(--line-strong)"/>
+        <circle cx="12" cy="12" r="6" stroke="var(--line-strong)"/>
         <g class="sweep"><path d="M12 12L12 1.5A10.5 10.5 0 0 1 21.1 6.75z" fill="url(#sw)"/></g>
-        <circle cx="12" cy="12" r="1.6" fill="#f5a524"/>
+        <circle cx="12" cy="12" r="1.6" fill="var(--accent)"/>
         <defs><linearGradient id="sw" x1="12" y1="2" x2="20" y2="8" gradientUnits="userSpaceOnUse"><stop stop-color="#f5a524" stop-opacity=".9"/><stop offset="1" stop-color="#f5a524" stop-opacity="0"/></linearGradient></defs>
       </svg>
       Radar <span>Latam</span>
     </a>
     
-    <nav class="nav" aria-label="Secciones">
-      <a href="index.html" >Radar en vivo</a>
-      <a href="filtro_paises.html" >Por país</a>
-      <a href="estadisticas.html" aria-current="page">Estadísticas</a>
-      <a href="historial.html" >Historial</a>
+    <nav class="nav" data-i18n-aria="nav.aria" aria-label="Secciones">
+      <a href="index.html" data-i18n="nav.radar" >Radar en vivo</a>
+      <a href="filtro_paises.html" data-i18n="nav.filtro" >Por país</a>
+      <a href="estadisticas.html" data-i18n="nav.stats" aria-current="page">Estadísticas</a>
+      <a href="historial.html" data-i18n="nav.hist" >Historial</a>
     </nav>
-    <div class="live" aria-live="polite">
-      <span id="live-dot" class="dot" aria-hidden="true"></span>
-      <span id="live-text">Conectando…</span>
+    <div class="tools-bar">
+      <div class="live" aria-live="polite">
+        <span id="live-dot" class="dot" aria-hidden="true"></span>
+        <span id="live-text" data-i18n="live.connecting">Conectando…</span>
+      </div>
+      <div class="seg" role="group" data-i18n-aria="lang.aria" aria-label="Idioma">
+        <button type="button" data-lang-btn="es" aria-pressed="true" lang="es">ES</button>
+        <button type="button" data-lang-btn="en" aria-pressed="false" lang="en">EN</button>
+      </div>
+      <button type="button" id="theme-btn" class="icon-btn" aria-label="Cambiar tema">
+        <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg>
+        <svg class="i-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/></svg>
+      </button>
     </div>
   </header>
 
@@ -98,106 +121,173 @@
 <main id="main" class="page">
   <div class="page-head" data-enter>
     <div>
-      <div class="eyebrow">Histórico en MongoDB</div>
-      <h1>Estadísticas por país</h1>
-      <p>Qué países registran más aeronaves en el espacio aéreo latinoamericano, según todas las capturas guardadas.</p>
+      <div class="eyebrow" data-i18n="st.eyebrow">Histórico en MongoDB</div>
+      <h1 data-i18n="st.h1">Estadísticas por país</h1>
+      <p data-i18n="st.lead">Qué países registran más aeronaves en el espacio aéreo latinoamericano, según todas las capturas guardadas.</p>
     </div>
   </div>
 
-  <section class="panel summary" aria-label="Resumen" data-enter="2">
+  <section class="panel summary" data-i18n-aria="st.summary" aria-label="Resumen" data-enter="2">
     <div class="kpis">
-      <div class="kpi"><div class="eyebrow">Posiciones registradas</div><div class="kpi-value" id="k-reg">—</div></div>
-      <div class="kpi"><div class="eyebrow">Países de matrícula</div><div class="kpi-value" id="k-pai">—</div></div>
-      <div class="kpi"><div class="eyebrow">Última captura</div><div class="kpi-value" id="k-ult" style="font-size:24px">—</div></div>
+      <div class="kpi"><div class="eyebrow" data-i18n="st.kReg">Posiciones registradas</div><div class="kpi-value" id="k-reg">—</div></div>
+      <div class="kpi"><div class="eyebrow" data-i18n="st.kPai">Países de matrícula</div><div class="kpi-value" id="k-pai">—</div></div>
+      <div class="kpi"><div class="eyebrow" data-i18n="st.kUlt">Última captura</div><div class="kpi-value" id="k-ult" style="font-size:26px">—</div></div>
     </div>
   </section>
 
   <div class="grid" data-enter="3">
     <section class="panel map-panel" aria-labelledby="t-mapa">
-      <div class="panel-head"><h2 id="t-mapa">Posición media por país</h2><span class="eyebrow">Tamaño = registros</span></div>
-      <div id="map-stats" class="map"></div>
+      <div class="panel-head"><h2 id="t-mapa" data-i18n="st.map">Volumen por país</h2><span class="eyebrow" data-i18n="st.mapHint">Altura = registros</span></div>
+      <div class="map-box"><div id="map-stats" class="map"></div></div>
     </section>
 
     <section class="panel" aria-labelledby="t-rank">
-      <div class="panel-head"><h2 id="t-rank">Top 10 países</h2><span class="eyebrow">Selecciona uno</span></div>
-      <ol class="rank" id="lista-paises"><li class="empty">Cargando datos…</li></ol>
+      <div class="panel-head"><h2 id="t-rank" data-i18n="st.rank">Top 10 países</h2><span class="eyebrow" data-i18n="st.rankHint">Selecciona uno</span></div>
+      <ol class="rank" id="lista-paises"><li class="empty" data-i18n="st.loading">Cargando datos…</li></ol>
     </section>
   </div>
 </main>
 
 
   
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 
+  <script src="static/js/i18n.js"></script>
   <script src="static/js/common.js"></script>
   
 <script>
-  const { esc, fmt, parseTs, hace, crearMapa, getJSON, estado } = Radar;
-  const map = crearMapa('map-stats', [-12, -60], 3);
-  const capa = L.layerGroup().addTo(map);
-  const burbujas = [];
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  const neutro = '#a3aeba';
+  const { t, esc, fmt, parseTs, hace, css, reducido, crearMapa, getJSON, estado, animarNumero } = Radar;
+  let ranking = [], resumen = null, sel = 0, alturaK = 0, error = false, estiloListo = false, crecido = false;
+  const etiquetas = [];
+  const pop = new maplibregl.Popup({ offset: 10, closeButton: false, focusAfterOpen: false });
+
+  // Columna cuadrada alrededor de la posición media del país
+  function columna(p, i, max) {
+    const lado = 1.7, dLon = lado / Math.cos(p.lat * Math.PI / 180);
+    const [x, y] = [p.lon, p.lat];
+    return {
+      type: 'Feature',
+      properties: { i, h: 150000 + (p.total / max) * 2200000 },
+      geometry: { type: 'Polygon', coordinates: [[[x - dLon, y - lado], [x + dLon, y - lado], [x + dLon, y + lado], [x - dLon, y + lado], [x - dLon, y - lado]]] },
+    };
+  }
+
+  function colorColumnas() {
+    return ['case', ['==', ['get', 'i'], sel], css('--accent'), css('--alt-mid')];
+  }
+
+  function capaColumnas(m) {
+    const max = ranking.length ? ranking[0].total : 1;
+    const data = { type: 'FeatureCollection', features: ranking.filter((p) => p.lat != null).map((p) => columna(p, ranking.indexOf(p), max)) };
+    if (m.getSource('columnas')) { m.getSource('columnas').setData(data); return; }
+    m.addSource('columnas', { type: 'geojson', data });
+    m.addLayer({
+      id: 'columnas', type: 'fill-extrusion', source: 'columnas',
+      paint: {
+        'fill-extrusion-color': colorColumnas(),
+        'fill-extrusion-height': ['*', ['get', 'h'], alturaK],
+        'fill-extrusion-opacity': .88,
+        'fill-extrusion-vertical-gradient': true,
+      },
+    });
+    if (!m._colClick) {
+      m._colClick = true;
+      m.on('click', 'columnas', (e) => marcar(e.features[0].properties.i));
+      m.on('mouseenter', 'columnas', () => { m.getCanvas().style.cursor = 'pointer'; });
+      m.on('mouseleave', 'columnas', () => { m.getCanvas().style.cursor = ''; });
+    }
+  }
+
+  function crecer() {
+    crecido = true;
+    if (reducido()) { alturaK = 1; map.setPaintProperty('columnas', 'fill-extrusion-height', ['get', 'h']); return; }
+    const t0 = performance.now(), dur = 1600;
+    const paso = (ahora) => {
+      const k = Math.min(1, (ahora - t0) / dur);
+      alturaK = 1 - Math.pow(1 - k, 3);
+      if (map.getLayer('columnas')) map.setPaintProperty('columnas', 'fill-extrusion-height', ['*', ['get', 'h'], alturaK]);
+      if (k < 1) requestAnimationFrame(paso);
+    };
+    requestAnimationFrame(paso);
+  }
+
+  const map = crearMapa('map-stats', {
+    onStyle: (m) => { estiloListo = true; if (ranking.length) { capaColumnas(m); if (!crecido) crecer(); } },
+  });
+
+  function ponerEtiquetas() {
+    etiquetas.forEach((mk) => mk.remove());
+    etiquetas.length = 0;
+    ranking.slice(0, 3).forEach((p) => {
+      if (p.lat == null) return;
+      const el = document.createElement('div');
+      el.className = 'col-label';
+      el.textContent = I18n.pais(p._id);
+      etiquetas.push(new maplibregl.Marker({ element: el, anchor: 'top', offset: [0, 14] }).setLngLat([p.lon, p.lat]).addTo(map));
+    });
+  }
 
   function marcar(i) {
+    sel = i;
     document.querySelectorAll('.rank button').forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
-    burbujas.forEach((c, j) => c.setStyle(j === i
-      ? { color: accent, fillColor: accent, fillOpacity: .45, weight: 2 }
-      : { color: neutro, fillColor: neutro, fillOpacity: .12, weight: 1 }));
-    const c = burbujas[i];
-    if (c) { map.flyTo(c.getLatLng(), 5, { duration: .8 }); c.openPopup(); }
+    if (map.getLayer('columnas')) map.setPaintProperty('columnas', 'fill-extrusion-color', colorColumnas());
+    const p = ranking[i];
+    if (!p || p.lat == null) return;
+    const opts = { center: [p.lon, p.lat], zoom: 3.6, pitch: 58, bearing: map.getBearing() + (reducido() ? 0 : 12) };
+    reducido() ? map.jumpTo(opts) : map.flyTo({ ...opts, duration: 1600, essential: false });
+    pop.setLngLat([p.lon, p.lat]).setHTML(`<div class="pop-title">${esc(I18n.pais(p._id))}</div><div class="pop-sub" style="margin:2px 0 0">${t('unit.records', { n: fmt.int(p.total) })}</div>`).addTo(map);
+  }
+
+  function pintar() {
+    const lista = document.getElementById('lista-paises');
+    if (error) {
+      estado(t('live.offline'), 'err');
+      lista.innerHTML = `<li class="empty"><strong>${t('st.err')}</strong>${t('st.errTip')}</li>`;
+      return;
+    }
+    if (!resumen) return;
+    const ult = parseTs(resumen.ultimo);
+    document.getElementById('k-ult').textContent = ult ? hace(ult) : t('st.never');
+    document.getElementById('k-ult').title = fmt.fecha(resumen.ultimo);
+    estado(t('live.records', { n: fmt.int(resumen.registros) }), resumen.registros ? 'on' : '');
+    if (!ranking.length) {
+      lista.innerHTML = `<li class="empty"><strong>${t('st.empty')}</strong>${t('st.emptyTip')}</li>`;
+      return;
+    }
+    const max = ranking[0].total;
+    const total = ranking.reduce((a, p) => a + p.total, 0);
+    lista.innerHTML = ranking.map((p, i) => `
+      <li><button type="button" data-i="${i}" aria-pressed="${i === sel}">
+        <span class="pos">${String(i + 1).padStart(2, '0')}</span>
+        <span class="name">${esc(I18n.pais(p._id))}</span>
+        <span class="val">${fmt.int(p.total)}<small>${p.total / total < .01 ? '&lt;1' : fmt.int(Math.round(p.total / total * 100))}%</small></span>
+        <span class="bar" aria-hidden="true"><span style="width:${(p.total / max * 100).toFixed(1)}%;animation-delay:${i * 45}ms"></span></span>
+      </button></li>`).join('');
+    ponerEtiquetas();
   }
 
   async function cargar() {
     try {
-      const [resumen, top] = await Promise.all([getJSON('/api/resumen'), getJSON('/api/top_paises')]);
-      document.getElementById('k-reg').textContent = fmt.int(resumen.registros);
-      document.getElementById('k-pai').textContent = fmt.int(resumen.paises);
-      const ult = parseTs(resumen.ultimo);
-      document.getElementById('k-ult').textContent = ult ? hace(ult) : 'Nunca';
-      document.getElementById('k-ult').title = fmt.fecha(resumen.ultimo);
-      estado(`${fmt.int(resumen.registros)} registros`, resumen.registros ? 'on' : '');
-
-      const lista = document.getElementById('lista-paises');
-      if (!top.length) {
-        lista.innerHTML = '<li class="empty"><strong>Aún no hay registros</strong>Actualiza el radar para empezar a acumular histórico.</li>';
-        return;
-      }
-      const max = top[0].total;
-      const total = top.reduce((a, p) => a + p.total, 0);
-      lista.innerHTML = top.map((p, i) => `
-        <li><button type="button" data-i="${i}" aria-pressed="false">
-          <span class="pos">${String(i + 1).padStart(2, '0')}</span>
-          <span class="name">${esc(p._id || 'Desconocido')}</span>
-          <span class="val">${fmt.int(p.total)}<small>${p.total / total < .01 ? '&lt;1' : Math.round(p.total / total * 100)}%</small></span>
-          <span class="bar" aria-hidden="true"><span style="width:${(p.total / max * 100).toFixed(1)}%;animation-delay:${i * 40}ms"></span></span>
-        </button></li>`).join('');
-
-      capa.clearLayers(); burbujas.length = 0;
-      top.forEach((p, i) => {
-        if (p.lat == null || p.lon == null) { burbujas.push(null); return; }
-        const r = 8 + Math.sqrt(p.total / max) * 34;
-        const c = L.circleMarker([p.lat, p.lon], {
-          radius: r,
-          color: i === 0 ? accent : neutro, fillColor: i === 0 ? accent : neutro,
-          fillOpacity: i === 0 ? .35 : .12, weight: i === 0 ? 2 : 1,
-        }).bindPopup(`<div class="pop-title">${esc(p._id)}</div><div class="pop-sub">${fmt.int(p.total)} registros</div>`)
-          .bindTooltip(esc(p._id), { permanent: i < 3, direction: 'center', className: 'bubble-label' })
-          .on('click', () => marcar(i))
-          .addTo(capa);
-        burbujas.push(c);
-      });
-      const pts = burbujas.filter(Boolean).map((c) => c.getLatLng());
-      if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 5 });
+      [resumen, ranking] = await Promise.all([getJSON('/api/resumen'), getJSON('/api/top_paises')]);
+      animarNumero(document.getElementById('k-reg'), resumen.registros);
+      animarNumero(document.getElementById('k-pai'), resumen.paises);
+      pintar();
+      if (estiloListo) { capaColumnas(map); if (!crecido) crecer(); }  // si no, onStyle lo hace
     } catch (e) {
-      estado('Sin conexión', 'err');
-      document.getElementById('lista-paises').innerHTML = '<li class="empty"><strong>No se pudo leer MongoDB</strong>Comprueba que el contenedor esté en marcha.</li>';
+      error = true;
+      pintar();
     }
   }
 
   document.getElementById('lista-paises').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-i]');
     if (b) marcar(Number(b.dataset.i));
+  });
+  document.addEventListener('langchange', () => {
+    pintar();
+    ['k-reg', 'k-pai'].forEach((id) => { const el = document.getElementById(id); if (el.dataset.v) el.textContent = fmt.int(Number(el.dataset.v)); });
+    const p = ranking[sel];
+    if (pop.isOpen() && p) pop.setHTML(`<div class="pop-title">${esc(I18n.pais(p._id))}</div><div class="pop-sub" style="margin:2px 0 0">${t('unit.records', { n: fmt.int(p.total) })}</div>`);
   });
   cargar();
 </script>

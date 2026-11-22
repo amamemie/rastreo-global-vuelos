@@ -36,7 +36,7 @@ def actualizar_vuelos():
     if not cache.set('lock:actualizar', '1', nx=True, ex=INTERVALO_MIN):
         espera = cache.ttl('lock:actualizar')
         en_cache = sum(1 for _ in cache.scan_iter("vuelo_live:*"))
-        return jsonify({"status": "success", "count": en_cache, "cached": True,
+        return jsonify({"status": "success", "count": en_cache, "cached": True, "espera": espera,
                         "message": f"Datos recientes; nueva consulta disponible en {espera}s"})
     try:
         estados = opensky.obtener_estados()

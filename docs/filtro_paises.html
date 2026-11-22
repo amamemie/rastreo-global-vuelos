@@ -1,49 +1,62 @@
 <!DOCTYPE html>
-<html lang="es" data-static="1">
+<html lang="es" data-theme="dark" data-static="1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    /* Tema e idioma antes de pintar: sin parpadeo */
+    (function () {
+      var d = document.documentElement, t = null, l = null;
+      try { t = localStorage.getItem('radar-theme'); l = localStorage.getItem('radar-lang'); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      if (l !== 'es' && l !== 'en') l = /^es\b/i.test(navigator.language || '') ? 'es' : 'en';
+      d.dataset.theme = t;
+      if (l !== 'es') { d.lang = l; d.classList.add('i18n-pending'); setTimeout(function () { d.classList.remove('i18n-pending'); }, 1500); }
+    })();
+  </script>
   <meta name="theme-color" content="#06080b">
-  <meta name="description" content="Rastreo en tiempo real del tráfico aéreo sobre Latinoamérica con datos de OpenSky Network.">
-  <title>Por país · Radar Latam</title>
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Rastreo en tiempo real del tráfico aéreo sobre Latinoamérica con datos de OpenSky Network. Real-time air traffic over Latin America.">
+  <title data-i18n-key="fi.title">Por país · Radar Latam</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%2306080b' stroke='%23f5a524' stroke-width='1.5'/%3E%3Cpath d='M12 12L12 2A10 10 0 0 1 21 8z' fill='%23f5a524'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://unpkg.com">
-  <link rel="preconnect" href="https://server.arcgisonline.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
 
   <link rel="stylesheet" href="static/css/app.css">
   
 <style>
   .split {
-    display: grid; grid-template-columns: 360px minmax(0, 1fr);
+    display: grid; grid-template-columns: 370px minmax(0, 1fr);
     height: calc(100dvh - var(--topbar-h));
   }
   .side {
     display: flex; flex-direction: column; min-height: 0;
     background: var(--surface); border-right: 1px solid var(--line);
   }
-  .side-top { padding: 24px 20px 20px; border-bottom: 1px solid var(--line); display: grid; gap: 14px; }
-  .side-top h1 { font: 700 30px/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+  .side-top { padding: 26px 22px 20px; border-bottom: 1px solid var(--line); display: grid; gap: 16px; }
+  .side-top h1 { margin-top: 8px; font: 700 36px/.95 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
   .side-top label { display: block; margin-bottom: 8px; }
-  .result { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 10px; }
-  .result b { font: 700 40px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .result { padding: 16px 22px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 10px; }
+  .result b { font: 700 44px/1 var(--font-display); font-variant-numeric: tabular-nums; }
   .result span { color: var(--ink-2); font-size: 14px; }
-  .items { list-style: none; margin: 0; padding: 8px; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; }
-  .items li { content-visibility: auto; contain-intrinsic-size: auto 52px; }
+  .items { list-style: none; margin: 0; padding: 8px 10px; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; }
+  .items li { content-visibility: auto; contain-intrinsic-size: auto 56px; }
   .item {
     width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px;
     padding: 10px 12px; border: 0; border-radius: var(--r-sm); background: none; text-align: left; cursor: pointer;
-    transition: background-color .12s var(--ease);
+    transition: background-color .15s var(--ease), transform .15s var(--ease);
   }
-  .item:hover { background: var(--surface-2); }
+  .item:hover { background: var(--surface-2); transform: translateX(2px); }
+  .item[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
   .item .cs { font: 600 14px/1.2 var(--font-mono); }
   .item .al { font: 500 13px/1.2 var(--font-mono); color: var(--ink-2); text-align: right; }
   .item .ts { grid-column: 1 / 3; font-size: 12px; color: var(--ink-3); }
-  .map-wrap { min-height: 0; }
+  .map-wrap { position: relative; min-height: 0; overflow: hidden; }
 
   @media (max-width: 900px) {
     .split { grid-template-columns: 1fr; height: auto; }
@@ -55,122 +68,161 @@
 
 </head>
 <body>
-  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <a class="skip-link" href="#main" data-i18n="skip">Saltar al contenido</a>
 
   <header class="topbar">
-    <a class="brand" href="index.html" aria-label="Radar Latam, inicio">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="10.5" stroke="#2a3440"/>
-        <circle cx="12" cy="12" r="6" stroke="#2a3440"/>
+    <a class="brand" href="index.html" translate="no" data-i18n-aria="brand.aria" aria-label="Radar Latam, inicio">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10.5" stroke="var(--line-strong)"/>
+        <circle cx="12" cy="12" r="6" stroke="var(--line-strong)"/>
         <g class="sweep"><path d="M12 12L12 1.5A10.5 10.5 0 0 1 21.1 6.75z" fill="url(#sw)"/></g>
-        <circle cx="12" cy="12" r="1.6" fill="#f5a524"/>
+        <circle cx="12" cy="12" r="1.6" fill="var(--accent)"/>
         <defs><linearGradient id="sw" x1="12" y1="2" x2="20" y2="8" gradientUnits="userSpaceOnUse"><stop stop-color="#f5a524" stop-opacity=".9"/><stop offset="1" stop-color="#f5a524" stop-opacity="0"/></linearGradient></defs>
       </svg>
       Radar <span>Latam</span>
     </a>
     
-    <nav class="nav" aria-label="Secciones">
-      <a href="index.html" >Radar en vivo</a>
-      <a href="filtro_paises.html" aria-current="page">Por país</a>
-      <a href="estadisticas.html" >Estadísticas</a>
-      <a href="historial.html" >Historial</a>
+    <nav class="nav" data-i18n-aria="nav.aria" aria-label="Secciones">
+      <a href="index.html" data-i18n="nav.radar" >Radar en vivo</a>
+      <a href="filtro_paises.html" data-i18n="nav.filtro" aria-current="page">Por país</a>
+      <a href="estadisticas.html" data-i18n="nav.stats" >Estadísticas</a>
+      <a href="historial.html" data-i18n="nav.hist" >Historial</a>
     </nav>
-    <div class="live" aria-live="polite">
-      <span id="live-dot" class="dot" aria-hidden="true"></span>
-      <span id="live-text">Conectando…</span>
+    <div class="tools-bar">
+      <div class="live" aria-live="polite">
+        <span id="live-dot" class="dot" aria-hidden="true"></span>
+        <span id="live-text" data-i18n="live.connecting">Conectando…</span>
+      </div>
+      <div class="seg" role="group" data-i18n-aria="lang.aria" aria-label="Idioma">
+        <button type="button" data-lang-btn="es" aria-pressed="true" lang="es">ES</button>
+        <button type="button" data-lang-btn="en" aria-pressed="false" lang="en">EN</button>
+      </div>
+      <button type="button" id="theme-btn" class="icon-btn" aria-label="Cambiar tema">
+        <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg>
+        <svg class="i-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/></svg>
+      </button>
     </div>
   </header>
 
   
 <main id="main" class="split">
-  <aside class="side" aria-label="Filtro">
+  <aside class="side" data-i18n-aria="fi.aria" aria-label="Filtro">
     <div class="side-top" data-enter>
       <div>
-        <div class="eyebrow">Histórico en MongoDB</div>
-        <h1 style="margin-top:6px">Vuelos por país</h1>
+        <div class="eyebrow" data-i18n="st.eyebrow">Histórico en MongoDB</div>
+        <h1 data-i18n="fi.h1">Vuelos por país</h1>
       </div>
       <div>
-        <label class="eyebrow" for="selector-pais">País de matrícula</label>
+        <label class="eyebrow" for="selector-pais" data-i18n="fi.label">País de matrícula</label>
         <select id="selector-pais" name="pais" class="select">
-          <option value="todos">Todos los países</option>
+          <option value="todos" data-i18n="fi.all">Todos los países</option>
         </select>
       </div>
     </div>
-    <div class="result" aria-live="polite" data-enter="2"><b id="res-n">—</b><span id="res-t">registros recientes</span></div>
+    <div class="result" aria-live="polite" data-enter="2"><b id="res-n">—</b><span id="res-t" data-i18n="fi.recent">registros recientes</span></div>
     <ul class="items" id="items"></ul>
   </aside>
-  <section class="map-wrap" aria-label="Mapa de registros"><div id="map" class="map"></div></section>
+  <section class="map-wrap" data-i18n-aria="fi.mapAria" aria-label="Mapa de registros"><div id="map" class="map"></div></section>
 </main>
 
 
   
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 
+  <script src="static/js/i18n.js"></script>
   <script src="static/js/common.js"></script>
   
 <script>
-  const { esc, fmt, crearMapa, iconoAvion, popupVuelo, getJSON, estado } = Radar;
-  const map = crearMapa('map', [-15, -60], 4);
-  const capa = L.layerGroup().addTo(map);
+  const { t, esc, fmt, crearMapa, capaAviones, marcarAvion, volarA, popupVuelo, popup, getJSON, estado, reducido } = Radar;
   const sel = document.getElementById('selector-pais');
-  let marcadores = [];
+  let paises = [], vuelos = [], porIcao = new Map(), elegido = null, error = false;
+  const pop = popup();
 
-  async function cargarPaises() {
-    try {
-      const paises = await getJSON('/api/top_paises');
-      paises.forEach((p) => {
-        const o = document.createElement('option');
-        o.value = p._id;
-        o.textContent = `${p._id} · ${fmt.int(p.total)}`;
-        sel.appendChild(o);
-      });
-    } catch (e) { /* el filtro sigue funcionando con "todos" */ }
-    const inicial = new URLSearchParams(location.search).get('pais');
-    if (inicial && [...sel.options].some((o) => o.value === inicial)) sel.value = inicial;
+  const map = crearMapa('map', {
+    onStyle: (m) => { capaAviones(m, vuelos, { onClick: (icao) => elegir(icao, false) }); marcarAvion(m, elegido); },
+  });
+
+  function popupHTML(v) { return popupVuelo(v) + `<div class="pop-sub" style="margin:10px 0 0">${fmt.fecha(v.timestamp)}</div>`; }
+
+  function elegir(icao, volar = true) {
+    elegido = icao;
+    const v = porIcao.get(icao);
+    marcarAvion(map, icao);
+    document.querySelectorAll('.item').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.icao === icao)));
+    if (!v) return;
+    if (volar) volarA(map, [v.longitud, v.latitud], { zoom: 6 });
+    pop.setLngLat([v.longitud, v.latitud]).setHTML(popupHTML(v)).addTo(map);
   }
+
+  function pintarOpciones() {
+    const actual = sel.value;
+    sel.querySelectorAll('option:not([value="todos"])').forEach((o) => o.remove());
+    paises.forEach((p) => {
+      const o = document.createElement('option');
+      o.value = p._id;
+      o.textContent = `${I18n.pais(p._id)} · ${fmt.int(p.total)}`;
+      sel.appendChild(o);
+    });
+    if ([...sel.options].some((o) => o.value === actual)) sel.value = actual;
+  }
+
+  function pintarLista() {
+    const items = document.getElementById('items');
+    if (error) {
+      estado(t('live.offline'), 'err');
+      items.innerHTML = `<li class="empty"><strong>${t('st.err')}</strong>${t('st.errTip')}</li>`;
+      return;
+    }
+    const pais = sel.value;
+    document.getElementById('res-n').textContent = fmt.int(vuelos.length);
+    document.getElementById('res-t').textContent = pais === 'todos' ? t('fi.recentAll') : t('fi.recentOf', { p: I18n.pais(pais) });
+    estado(t('live.records', { n: fmt.int(vuelos.length) }), vuelos.length ? 'on' : '');
+    items.innerHTML = vuelos.length ? vuelos.map((v) => `
+      <li><button type="button" class="item" data-icao="${esc(v.icao24)}" aria-pressed="${v.icao24 === elegido}">
+        <span class="cs" translate="no">${esc(v.callsign)}</span>
+        <span class="al">${fmt.alt(v.altitud)}</span>
+        <span class="ts">${esc(I18n.pais(v.pais))} · ${fmt.fecha(v.timestamp)}</span>
+      </button></li>`).join('')
+      : `<li class="empty"><strong>${t('fi.none')}</strong>${t('fi.noneTip')}</li>`;
+  }
+
 
   async function filtrar() {
     const pais = sel.value;
     const url = new URL(location);
     pais === 'todos' ? url.searchParams.delete('pais') : url.searchParams.set('pais', pais);
     history.replaceState(null, '', url);
-
-    capa.clearLayers();
+    pop.remove(); elegido = null;
     try {
-      const vuelos = await getJSON(pais === 'todos' ? '/api/historial_datos' : `/api/vuelos_por_pais?pais=${encodeURIComponent(pais)}`);
-      const conPos = vuelos.filter((v) => v.latitud != null && v.longitud != null);
-      marcadores = conPos.map((v) => L.marker([v.latitud, v.longitud], { icon: iconoAvion(v, 20), keyboard: false })
-        .bindPopup(popupVuelo(v) + `<div class="pop-sub" style="margin:10px 0 0">${fmt.fecha(v.timestamp)}</div>`)
-        .addTo(capa));
-      document.getElementById('res-n').textContent = fmt.int(vuelos.length);
-      document.getElementById('res-t').textContent = pais === 'todos' ? 'registros recientes, todos los países' : `registros recientes de ${pais}`;
-      estado(`${fmt.int(vuelos.length)} registros`, vuelos.length ? 'on' : '');
-
-      const items = document.getElementById('items');
-      items.innerHTML = conPos.length ? conPos.map((v, i) => `
-        <li><button type="button" class="item" data-i="${i}">
-          <span class="cs" translate="no">${esc(v.callsign)}</span>
-          <span class="al">${fmt.alt(v.altitud)}</span>
-          <span class="ts">${esc(v.pais)} · ${fmt.fecha(v.timestamp)}</span>
-        </button></li>`).join('')
-        : '<li class="empty"><strong>Sin registros</strong>Actualiza el radar para acumular datos.</li>';
-
-      if (marcadores.length) map.fitBounds(L.latLngBounds(marcadores.map((m) => m.getLatLng())), { padding: [40, 40], maxZoom: 7 });
+      const datos = await getJSON(pais === 'todos' ? '/api/historial_datos' : `/api/vuelos_por_pais?pais=${encodeURIComponent(pais)}`);
+      error = false;
+      vuelos = datos.filter((v) => v.latitud != null && v.longitud != null);
+      porIcao = new Map(vuelos.map((v) => [v.icao24, v]));
+      if (map.getSource('vuelos')) { capaAviones(map, vuelos); marcarAvion(map, null); }  // si no, onStyle la crea
     } catch (e) {
-      estado('Sin conexión', 'err');
-      document.getElementById('items').innerHTML = '<li class="empty"><strong>No se pudo leer MongoDB</strong>Comprueba que el contenedor esté en marcha.</li>';
+      error = true;
     }
+    pintarLista();
+  }
+
+  async function iniciar() {
+    try { paises = await getJSON('/api/top_paises'); } catch (e) { paises = []; }
+    pintarOpciones();
+    const inicial = new URLSearchParams(location.search).get('pais');
+    if (inicial && [...sel.options].some((o) => o.value === inicial)) sel.value = inicial;
+    filtrar();
   }
 
   document.getElementById('items').addEventListener('click', (e) => {
     const b = e.target.closest('.item');
-    if (!b) return;
-    const m = marcadores[Number(b.dataset.i)];
-    map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 7), { duration: .8 });
-    m.openPopup();
+    if (b) elegir(b.dataset.icao);
   });
   sel.addEventListener('change', filtrar);
-  cargarPaises().then(filtrar);
+  document.addEventListener('langchange', () => {
+    pintarOpciones(); pintarLista();
+    if (elegido && pop.isOpen()) pop.setHTML(popupHTML(porIcao.get(elegido)));
+  });
+  iniciar();
 </script>
 
 </body>

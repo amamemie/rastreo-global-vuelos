@@ -2,7 +2,7 @@
 
 > 🇪🇸 [Versión en español](README.es.md)
 
-**Radar Latam** tracks the aircraft flying over Latin America in real time. It pulls live positions from the [OpenSky Network](https://opensky-network.org) API, keeps the current state in **Redis**, stores every capture in **MongoDB**, and shows everything on an interactive dark-themed map.
+**Radar Latam** tracks the aircraft flying over Latin America in real time. It pulls live positions from the [OpenSky Network](https://opensky-network.org) API, keeps the current state in **Redis**, stores every capture in **MongoDB**, and shows everything on an interactive **3D globe**. The interface has **light and dark themes** and is available in **English and Spanish**.
 
 The project demonstrates a two-layer data architecture:
 - a fast, short-lived **live layer** in Redis;
@@ -12,7 +12,7 @@ The project demonstrates a two-layer data architecture:
 
 The demo is a static snapshot of the database, so it runs without a server. Running the app locally gives you live data.
 
-![Live radar view](screenshots/radar.png)
+![Live radar — dark theme](screenshots/radar.png)
 
 ---
 
@@ -20,14 +20,23 @@ The demo is a static snapshot of the database, so it runs without a server. Runn
 
 | View | What it does |
 |---|---|
-| **Live radar** (`/`) | Full-screen map of every aircraft between 55° S and 15° N. Each plane points in its real heading and is colored by altitude. A side panel shows the aircraft count, average altitude, the leading country, and a searchable flight list. Clicking a flight flies the map to it. |
-| **By country** (`/filtro_paises`) | Filters the stored history by country of registration. The selected country is kept in the URL (`?pais=Chile`), so you can share a link to it. |
-| **Statistics** (`/estadisticas`) | Shows totals (positions stored, countries, last capture) and a top-10 ranking of countries. Each country also appears as a bubble on the map, sized by its number of records. All figures come from a MongoDB aggregation. |
+| **Live radar** (`/`) | A 3D globe, centered in the view, with every aircraft between 55° S and 15° N. On load the camera flies in from space and settles over Latin America. Each plane points in its real heading and is colored by altitude. A side panel shows the aircraft count, average altitude, the leading country, and a searchable flight list. Clicking a flight flies the camera down to it with a tilted 3D view and opens its details. |
+| **By country** (`/filtro_paises`) | Filters the stored history by country of registration and plots the matching aircraft on the globe. The selected country is kept in the URL (`?pais=Chile`), so you can share a link to it. |
+| **Statistics** (`/estadisticas`) | Shows totals (positions stored, countries, last capture) and a top-10 ranking of countries. Each country also appears as a **3D column** on the globe, with height proportional to its number of records; the columns grow on load. All figures come from a MongoDB aggregation. |
 | **History** (`/historial`) | Lists the 100 most recent positions stored in MongoDB, with filtering, altitude, and speed. |
 
-| Statistics | By country | History |
-|---|---|---|
-| ![Statistics](screenshots/estadisticas.png) | ![By country](screenshots/filtro_paises.png) | ![History](screenshots/historial.png) |
+**Across every view:**
+- **Light and dark themes.** The app follows your system setting until you pick one with the sun/moon button; the choice is remembered and applied before the page paints, so there is no flash. The map restyles itself without losing its data.
+- **English and Spanish.** Switch with the ES/EN control. Every label, message, popup, and country name is translated, and numbers and dates follow the selected language.
+- **Motion with restraint.** Camera flights, growing columns, and count-ups all stop when the system asks for reduced motion.
+- **Responsive.** The layout works down to phone width.
+| Statistics (3D columns) | By country |
+|---|---|
+| ![Statistics](screenshots/estadisticas.png) | ![By country](screenshots/filtro_paises.png) |
+
+| Light theme | History (light theme) |
+|---|---|
+| ![Live radar — light theme](screenshots/radar-light.png) | ![History](screenshots/historial.png) |
 
 ---
 
@@ -52,14 +61,14 @@ The demo is a static snapshot of the database, so it runs without a server. Runn
                    └───────┬──────────┘
                            ▼
                  ┌───────────────────┐        exportar_estatico.py
-                 │ Web UI (Leaflet)  │ ─────────────────────────────▶  docs/  →  GitHub Pages
+                 │ Web UI (MapLibre) │ ─────────────────────────────▶  docs/  →  GitHub Pages
                  └───────────────────┘        (JSON snapshot)
 ```
 
 1. **Ingestion.** Pressing **Refresh radar** in the UI (or running `app_ingestor.py`) calls OpenSky's `/states/all` endpoint for the Latin American bounding box.
 2. **Live layer (Redis).** Each aircraft is stored as `vuelo_live:<icao24>` with a 5-minute expiry. Planes that stop reporting disappear automatically.
 3. **History layer (MongoDB).** Every capture is appended to `rastreo_logistica.historico_vuelos`. The statistics and filter views query this collection, using aggregation pipelines with `$group`, `$avg`, and `$sort`.
-4. **Frontend.** Server-rendered Jinja templates plus vanilla JavaScript call the Flask JSON API and draw the data with Leaflet.
+4. **Frontend.** Server-rendered Jinja templates plus vanilla JavaScript call the Flask JSON API and draw the data with MapLibre GL on a 3D globe. Aircraft are a GeoJSON symbol layer; country volumes are `fill-extrusion` columns.
 5. **Static export.** `exportar_estatico.py` dumps a MongoDB snapshot to JSON and renders the same pages in "static mode" into `docs/`, which GitHub Pages serves.
 
 ### Stored document
@@ -92,8 +101,9 @@ Field names are Spanish: `pais` = country, `altitud` = altitude in meters, `velo
 | Historical data store | **MongoDB 7** (PyMongo) |
 | Data source | **OpenSky Network REST API** (OAuth2 client credentials, anonymous fallback) |
 | Frontend | HTML + Jinja2 templates, vanilla JavaScript, custom CSS design system |
-| Maps | **Leaflet 1.9**, Esri Dark Gray Canvas tiles |
-| Fonts | Barlow, Barlow Condensed, JetBrains Mono (Google Fonts) |
+| Maps & 3D | **MapLibre GL JS 5.24** (globe projection, atmosphere, camera flights, fill-extrusion columns), **OpenFreeMap** vector tiles (Positron for light; the dark style recolored to a bright blue globe; no API key) |
+| UI | Light/dark themes with CSS tokens (follows the system by default), English/Spanish with a small i18n dictionary, `Intl` for numbers and dates, `prefers-reduced-motion` support |
+| Design | Based on the SpaceX design guide from awesome-design-md: condensed uppercase display type, hairline borders, pill buttons, a single amber accent. Fonts: Barlow, Barlow Condensed, JetBrains Mono (Google Fonts) |
 | Infrastructure | **Docker Compose** for MongoDB and Redis; **GitHub Pages** for the static demo; Render blueprint included for a full deployment |
 
 ---
@@ -190,7 +200,10 @@ The repository includes a `render.yaml` blueprint:
 ├── database.py             # MongoDB and Redis connections (env-configurable)
 ├── exportar_estatico.py    # Exports a MongoDB snapshot + static pages to docs/
 ├── templates/              # Jinja templates (base layout + 4 views)
-├── static/                 # Shared CSS design system and JS helpers
+├── static/
+│   ├── css/app.css         # Design system: tokens for both themes, components
+│   ├── js/common.js        # Formatting, theme, 3D globe helpers, data access
+│   └── js/i18n.js          # English/Spanish dictionary and country names
 ├── docs/                   # Generated static site served by GitHub Pages
 ├── screenshots/            # Images used in this README
 ├── docker-compose.yml      # MongoDB + Redis for local development
@@ -202,4 +215,4 @@ The repository includes a `render.yaml` blueprint:
 
 ## Data attribution
 
-Flight data: [The OpenSky Network](https://opensky-network.org). Map tiles: © Esri, HERE, Garmin, © OpenStreetMap contributors.
+Flight data: [The OpenSky Network](https://opensky-network.org). Map tiles: [OpenFreeMap](https://openfreemap.org), © OpenMapTiles, © OpenStreetMap contributors.

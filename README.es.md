@@ -5,6 +5,19 @@
 Radar de vuelos sobre Latinoamérica con datos de OpenSky Network.
 Usa Redis para el estado en vivo y MongoDB para el histórico.
 
+### 🌐 Demo: **[amamemie.github.io/rastreo-global-vuelos](https://amamemie.github.io/rastreo-global-vuelos/)**
+
+![Radar en vivo](screenshots/radar.png)
+
+## Qué incluye
+
+- **Radar en vivo:** globo 3D centrado con todos los aviones entre 55° S y 15° N, orientados según su rumbo y coloreados por altitud. Al elegir un vuelo, la cámara vuela hasta él con vista inclinada.
+- **Por país:** filtra el histórico por país de matrícula; el país queda en la URL (`?pais=Chile`).
+- **Estadísticas:** totales y top 10 de países, con una columna 3D por país sobre el globo.
+- **Historial:** las 100 posiciones más recientes de MongoDB, con filtro.
+- **Modo claro y oscuro** (sigue al sistema hasta que eliges uno) e **idiomas español e inglés** (botón ES/EN).
+- Hecho con Flask, Redis, MongoDB y MapLibre GL (mapas de OpenFreeMap, sin API key).
+
 ## Cómo ejecutarlo
 
 ```bash
@@ -13,7 +26,7 @@ source venv/bin/activate
 python app.py                   # http://localhost:5000
 ```
 
-En la web, pulsa **"Actualizar datos API"** para traer los vuelos actuales.
+En la web, pulsa **"Actualizar radar"** para traer los vuelos actuales.
 
 Opcional: en otra terminal, `python app_ingestor.py` captura vuelos de forma automática cada 60 s.
 

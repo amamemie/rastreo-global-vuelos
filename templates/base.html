@@ -1,51 +1,74 @@
 <!DOCTYPE html>
-<html lang="es"{% if static_mode %} data-static="1"{% endif %}>
+<html lang="es" data-theme="dark"{% if static_mode %} data-static="1"{% endif %}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    /* Tema e idioma antes de pintar: sin parpadeo */
+    (function () {
+      var d = document.documentElement, t = null, l = null;
+      try { t = localStorage.getItem('radar-theme'); l = localStorage.getItem('radar-lang'); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      if (l !== 'es' && l !== 'en') l = /^es\b/i.test(navigator.language || '') ? 'es' : 'en';
+      d.dataset.theme = t;
+      if (l !== 'es') { d.lang = l; d.classList.add('i18n-pending'); setTimeout(function () { d.classList.remove('i18n-pending'); }, 1500); }
+    })();
+  </script>
   <meta name="theme-color" content="#06080b">
-  <meta name="description" content="{% block description %}Rastreo en tiempo real del tráfico aéreo sobre Latinoamérica con datos de OpenSky Network.{% endblock %}">
-  <title>{% block title %}Radar Latam{% endblock %}</title>
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Rastreo en tiempo real del tráfico aéreo sobre Latinoamérica con datos de OpenSky Network. Real-time air traffic over Latin America.">
+  <title data-i18n-key="{% block title_key %}idx.title{% endblock %}">{% block title %}Radar Latam{% endblock %}</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%2306080b' stroke='%23f5a524' stroke-width='1.5'/%3E%3Cpath d='M12 12L12 2A10 10 0 0 1 21 8z' fill='%23f5a524'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://unpkg.com">
-  <link rel="preconnect" href="https://server.arcgisonline.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   {% block head_extra %}{% endblock %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   {% block styles %}{% endblock %}
 </head>
 <body>
-  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <a class="skip-link" href="#main" data-i18n="skip">Saltar al contenido</a>
 
   <header class="topbar">
-    <a class="brand" href="/" aria-label="Radar Latam, inicio">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="10.5" stroke="#2a3440"/>
-        <circle cx="12" cy="12" r="6" stroke="#2a3440"/>
+    <a class="brand" href="/" translate="no" data-i18n-aria="brand.aria" aria-label="Radar Latam, inicio">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10.5" stroke="var(--line-strong)"/>
+        <circle cx="12" cy="12" r="6" stroke="var(--line-strong)"/>
         <g class="sweep"><path d="M12 12L12 1.5A10.5 10.5 0 0 1 21.1 6.75z" fill="url(#sw)"/></g>
-        <circle cx="12" cy="12" r="1.6" fill="#f5a524"/>
+        <circle cx="12" cy="12" r="1.6" fill="var(--accent)"/>
         <defs><linearGradient id="sw" x1="12" y1="2" x2="20" y2="8" gradientUnits="userSpaceOnUse"><stop stop-color="#f5a524" stop-opacity=".9"/><stop offset="1" stop-color="#f5a524" stop-opacity="0"/></linearGradient></defs>
       </svg>
       Radar <span>Latam</span>
     </a>
     {% set active = active|default('radar') %}
-    <nav class="nav" aria-label="Secciones">
-      <a href="/" {% if active == 'radar' %}aria-current="page"{% endif %}>Radar en vivo</a>
-      <a href="/filtro_paises" {% if active == 'filtro' %}aria-current="page"{% endif %}>Por país</a>
-      <a href="/estadisticas" {% if active == 'estadisticas' %}aria-current="page"{% endif %}>Estadísticas</a>
-      <a href="/historial" {% if active == 'historial' %}aria-current="page"{% endif %}>Historial</a>
+    <nav class="nav" data-i18n-aria="nav.aria" aria-label="Secciones">
+      <a href="/" data-i18n="nav.radar" {% if active == 'radar' %}aria-current="page"{% endif %}>Radar en vivo</a>
+      <a href="/filtro_paises" data-i18n="nav.filtro" {% if active == 'filtro' %}aria-current="page"{% endif %}>Por país</a>
+      <a href="/estadisticas" data-i18n="nav.stats" {% if active == 'estadisticas' %}aria-current="page"{% endif %}>Estadísticas</a>
+      <a href="/historial" data-i18n="nav.hist" {% if active == 'historial' %}aria-current="page"{% endif %}>Historial</a>
     </nav>
-    <div class="live" aria-live="polite">
-      <span id="live-dot" class="dot" aria-hidden="true"></span>
-      <span id="live-text">Conectando…</span>
+    <div class="tools-bar">
+      <div class="live" aria-live="polite">
+        <span id="live-dot" class="dot" aria-hidden="true"></span>
+        <span id="live-text" data-i18n="live.connecting">Conectando…</span>
+      </div>
+      <div class="seg" role="group" data-i18n-aria="lang.aria" aria-label="Idioma">
+        <button type="button" data-lang-btn="es" aria-pressed="true" lang="es">ES</button>
+        <button type="button" data-lang-btn="en" aria-pressed="false" lang="en">EN</button>
+      </div>
+      <button type="button" id="theme-btn" class="icon-btn" aria-label="Cambiar tema">
+        <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg>
+        <svg class="i-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/></svg>
+      </button>
     </div>
   </header>
 
   {% block content %}{% endblock %}
 
   {% block scripts_lib %}{% endblock %}
+  <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
   <script src="{{ url_for('static', filename='js/common.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>

@@ -1,13 +1,16 @@
 {% extends "base.html" %}
 {% set active = 'historial' %}
+{% block title_key %}hi.title{% endblock %}
 {% block title %}Historial · Radar Latam{% endblock %}
 
 {% block styles %}
 <style>
   .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .tools .field { width: 280px; }
-  .hist .table-wrap { max-height: calc(100dvh - 300px); min-height: 320px; }
+  .tools .field { width: 290px; }
+  .hist .table-wrap { max-height: calc(100dvh - 320px); min-height: 340px; }
   .foot { padding: 12px 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .table tbody tr { animation: row .45s var(--ease) both; }
+  @keyframes row { from { opacity: 0; transform: translateY(6px); } }
   @media (max-width: 600px) {
     .tools, .tools .field { width: 100%; }
     .tools .btn { flex: 1; }
@@ -21,37 +24,37 @@
   <div class="page-head" data-enter>
     <div>
       <div class="eyebrow">MongoDB · historico_vuelos</div>
-      <h1>Historial de posiciones</h1>
-      <p>Las 100 posiciones más recientes guardadas en la base de datos.</p>
+      <h1 data-i18n="hi.h1">Historial de posiciones</h1>
+      <p data-i18n="hi.lead">Las 100 posiciones más recientes guardadas en la base de datos.</p>
     </div>
     <div class="tools">
       <div class="field">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <label class="sr-only" for="filtro">Filtrar registros</label>
-        <input id="filtro" name="filtro" class="input" type="search" placeholder="Filtrar por vuelo o país…" autocomplete="off" spellcheck="false">
+        <label class="sr-only" for="filtro" data-i18n="hi.filterLabel">Filtrar registros</label>
+        <input id="filtro" name="filtro" class="input" type="search" placeholder="Filtrar por vuelo o país…" data-i18n-placeholder="hi.filterPh" autocomplete="off" spellcheck="false">
       </div>
       <button id="btn-refresh" class="btn" type="button">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-        Refrescar
+        <span data-i18n="hi.refresh">Refrescar</span>
       </button>
     </div>
   </div>
 
-  <section class="panel hist" aria-label="Registros" data-enter="2">
+  <section class="panel hist" data-i18n-aria="hi.aria" aria-label="Registros" data-enter="2">
     <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
-            <th scope="col">Fecha y hora</th>
+            <th scope="col" data-i18n="hi.thDate">Fecha y hora</th>
             <th scope="col">ICAO24</th>
-            <th scope="col">Vuelo</th>
-            <th scope="col">País de matrícula</th>
-            <th scope="col" class="r">Altitud</th>
-            <th scope="col" class="r">Velocidad</th>
+            <th scope="col" data-i18n="hi.thFlight">Vuelo</th>
+            <th scope="col" data-i18n="hi.thCountry">País de matrícula</th>
+            <th scope="col" class="r" data-i18n="hi.thAlt">Altitud</th>
+            <th scope="col" class="r" data-i18n="hi.thVel">Velocidad</th>
           </tr>
         </thead>
         <tbody id="tabla-cuerpo">
-          <tr><td colspan="6"><div class="empty">Consultando la base de datos…</div></td></tr>
+          <tr><td colspan="6"><div class="empty" data-i18n="hi.loading">Consultando la base de datos…</div></td></tr>
         </tbody>
       </table>
     </div>
@@ -62,31 +65,40 @@
 
 {% block scripts %}
 <script>
-  const { esc, fmt, altColor, getJSON, estado } = Radar;
-  let datos = [];
+  const { t, esc, fmt, altColor, getJSON, estado } = Radar;
+  let datos = [], leido = null, error = false, primera = true;
 
   function pintar() {
-    const q = document.getElementById('filtro').value.trim().toLowerCase();
-    const filas = q ? datos.filter((v) => `${v.callsign} ${v.icao24} ${v.pais}`.toLowerCase().includes(q)) : datos;
     const tbody = document.getElementById('tabla-cuerpo');
-    document.getElementById('foot-l').textContent = q
-      ? `${fmt.int(filas.length)} de ${fmt.int(datos.length)} registros`
-      : `${fmt.int(datos.length)} registros`;
-    if (!filas.length) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty">${datos.length
-        ? '<strong>Sin coincidencias</strong>Prueba con otro vuelo o país.'
-        : '<strong>Aún no hay registros</strong>Ve al Radar en vivo y pulsa “Actualizar radar”.'}</div></td></tr>`;
+    if (error) {
+      estado(t('live.offline'), 'err');
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>${t('st.err')}</strong>${t('hi.errTip')}</div></td></tr>`;
       return;
     }
-    tbody.innerHTML = filas.map((v) => `
-      <tr>
+    const q = document.getElementById('filtro').value.trim().toLowerCase();
+    const filas = q ? datos.filter((v) => `${v.callsign} ${v.icao24} ${v.pais} ${I18n.pais(v.pais)}`.toLowerCase().includes(q)) : datos;
+    document.getElementById('foot-l').textContent = q
+      ? t('hi.of', { a: fmt.int(filas.length), b: fmt.int(datos.length) })
+      : t('unit.records', { n: fmt.int(datos.length) });
+    document.getElementById('foot-r').textContent = leido ? t('hi.read', { h: fmt.hora(leido) }) : '';
+    estado(t('live.records', { n: fmt.int(datos.length) }), datos.length ? 'on' : '');
+    if (!filas.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty">${datos.length
+        ? `<strong>${t('idx.noMatch')}</strong>${t('hi.noMatchTip')}`
+        : `<strong>${t('st.empty')}</strong>${t('hi.emptyTip')}`}</div></td></tr>`;
+      return;
+    }
+    // Animación escalonada solo en la primera carga
+    tbody.innerHTML = filas.map((v, i) => `
+      <tr style="${primera && i < 16 ? `animation-delay:${i * 25}ms` : 'animation:none'}">
         <td class="mono muted">${fmt.fecha(v.timestamp)}</td>
         <td><span class="tag" translate="no">${esc(v.icao24)}</span></td>
         <td class="mono" style="font-weight:600" translate="no">${esc(v.callsign)}</td>
-        <td>${esc(v.pais)}</td>
+        <td>${esc(I18n.pais(v.pais))}</td>
         <td class="r mono"><span class="alt-pill">${fmt.alt(v.altitud)}<i style="background:${altColor(v.altitud, v.en_tierra)}" aria-hidden="true"></i></span></td>
         <td class="r mono muted">${fmt.vel(v.velocidad)}</td>
       </tr>`).join('');
+    primera = false;
   }
 
   async function cargar() {
@@ -94,19 +106,20 @@
     btn.disabled = true; btn.classList.add('loading');
     try {
       datos = await getJSON('/api/historial_datos');
-      pintar();
-      document.getElementById('foot-r').textContent = `Leído ${fmt.hora(new Date())}`;
-      estado(`${fmt.int(datos.length)} registros`, datos.length ? 'on' : '');
+      error = false;
+      leido = new Date();
     } catch (e) {
-      estado('Sin conexión', 'err');
-      document.getElementById('tabla-cuerpo').innerHTML = '<tr><td colspan="6"><div class="empty"><strong>No se pudo leer MongoDB</strong>Comprueba que el contenedor esté en marcha y refresca.</div></td></tr>';
+      error = true;
     } finally {
       btn.disabled = false; btn.classList.remove('loading');
     }
+    pintar();
   }
 
   document.getElementById('btn-refresh').addEventListener('click', cargar);
   document.getElementById('filtro').addEventListener('input', pintar);
+  document.addEventListener('langchange', pintar);
+  document.addEventListener('themechange', pintar);
   cargar();
 </script>
 {% endblock %}

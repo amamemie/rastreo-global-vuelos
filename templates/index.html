@@ -1,65 +1,66 @@
 {% extends "base.html" %}
 {% set active = 'radar' %}
+{% block title_key %}idx.title{% endblock %}
 {% block title %}Radar en vivo · Radar Latam{% endblock %}
 
 {% block head_extra %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
 {% endblock %}
 
 {% block styles %}
 <style>
   .radar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-columns: minmax(0, 1fr) 390px;
     height: calc(100dvh - var(--topbar-h));
   }
-  .radar-map { position: relative; min-height: 0; }
-  .radar-map .legend-box {
-    position: absolute; left: 12px; bottom: 28px; z-index: 500;
-    padding: 10px 14px;
-    background: rgba(12, 16, 21, .88);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-md);
-  }
-  .radar-map .legend-box .eyebrow { margin-bottom: 8px; }
+  .radar-map { position: relative; min-height: 0; overflow: hidden; }
+  .legend-box { left: 14px; bottom: 30px; }
+  .legend-box .eyebrow { margin-bottom: 8px; }
 
   .side {
     display: flex; flex-direction: column; min-height: 0;
     border-left: 1px solid var(--line);
     background: var(--surface);
   }
-  .hero-count { padding: 24px 20px 20px; border-bottom: 1px solid var(--line); }
-  .hero-count h1 { font: 600 13px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+  .hero-count { padding: 26px 22px 20px; border-bottom: 1px solid var(--line); }
+  .hero-count h1 { font: 600 12.5px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
   .count {
-    margin: 10px 0 4px;
-    font: 700 76px/.9 var(--font-display);
-    letter-spacing: -.01em;
+    margin: 12px 0 6px;
+    font: 700 84px/.86 var(--font-display);
+    letter-spacing: .01em;
     font-variant-numeric: tabular-nums;
+    background: linear-gradient(180deg, var(--ink) 30%, color-mix(in srgb, var(--ink) 55%, transparent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .count-sub { color: var(--ink-2); font-size: 14px; }
   .side .kpis { border-bottom: 1px solid var(--line); }
   .side .kpi { padding: 14px 16px; }
   .side .kpi-value { font-size: 22px; }
-  .actions { padding: 16px 20px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+  .actions { padding: 18px 22px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
   .actions .hint { font-size: 12.5px; color: var(--ink-3); }
   .actions .hint.err { color: var(--err); }
-  .snapshot { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line-strong); border-left: 2px solid var(--accent); border-radius: var(--r-sm); background: var(--surface-2); font-size: 13.5px; color: var(--ink-2); }
+  .snapshot {
+    display: grid; gap: 6px; padding: 12px 14px;
+    border: 1px solid var(--line-strong); border-left: 2px solid var(--accent);
+    border-radius: var(--r-sm); background: var(--surface-2);
+    font-size: 13.5px; color: var(--ink-2);
+  }
   .snapshot b { color: var(--ink); font-weight: 500; }
 
-  .list-head { padding: 16px 20px 12px; display: grid; gap: 12px; }
+  .list-head { padding: 16px 22px 12px; display: grid; gap: 12px; }
   .list-head .row { display: flex; justify-content: space-between; align-items: baseline; }
-  .flights { list-style: none; margin: 0; padding: 0 8px 12px; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; }
-  .flights li { content-visibility: auto; contain-intrinsic-size: auto 52px; }
+  .flights { list-style: none; margin: 0; padding: 0 10px 12px; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; }
+  .flights li { content-visibility: auto; contain-intrinsic-size: auto 54px; }
   .flight {
     width: 100%;
     display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 12px;
     padding: 10px 12px;
     background: none; border: 0; border-radius: var(--r-sm);
     text-align: left; cursor: pointer;
-    transition: background-color .12s var(--ease);
+    transition: background-color .15s var(--ease), transform .15s var(--ease);
   }
-  .flight:hover { background: var(--surface-2); }
+  .flight:hover { background: var(--surface-2); transform: translateX(2px); }
   .flight[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
   .flight i { width: 8px; height: 8px; border-radius: 50%; }
   .flight .cs { font: 600 14px/1.2 var(--font-mono); letter-spacing: .02em; }
@@ -68,12 +69,12 @@
 
   @media (max-width: 960px) {
     .radar { grid-template-columns: 1fr; height: auto; }
-    .radar-map { height: 62dvh; }
+    .radar-map { height: 64dvh; }
     .side { border-left: 0; border-top: 1px solid var(--line); }
     .flights { max-height: 60dvh; }
-    .count { font-size: 60px; }
-    .radar-map .legend-box { left: 8px; bottom: 22px; padding: 8px 10px; }
-    .radar-map .legend-box .eyebrow { display: none; }
+    .count { font-size: 64px; }
+    .legend-box { left: auto; right: 8px; top: 8px; bottom: auto; padding: 8px 10px; max-width: 190px; }
+    .legend-box .eyebrow { display: none; }
     .legend { font-size: 11px; gap: 4px 10px; }
   }
 </style>
@@ -81,56 +82,56 @@
 
 {% block content %}
 <main id="main" class="radar">
-  <section class="radar-map" aria-label="Mapa de tráfico aéreo">
+  <section class="radar-map" data-i18n-aria="idx.mapAria" aria-label="Mapa de tráfico aéreo en 3D">
     <div id="map" class="map"></div>
-    <div class="legend-box" data-enter="2">
-      <div class="eyebrow">Altitud</div>
+    <div class="map-overlay legend-box" data-enter="3">
+      <div class="eyebrow" data-i18n="idx.legend">Altitud</div>
       <div class="legend">
-        <span><i style="background:var(--alt-ground)"></i>En tierra</span>
-        <span><i style="background:var(--alt-low)"></i>&lt; 4.000&nbsp;m</span>
-        <span><i style="background:var(--alt-mid)"></i>&lt; 9.000&nbsp;m</span>
-        <span><i style="background:var(--alt-high)"></i>Crucero</span>
+        <span><i style="background:var(--alt-ground)"></i><span data-i18n="ground">En tierra</span></span>
+        <span><i style="background:var(--alt-low)"></i><span data-i18n="idx.low">&lt; 4.000 m</span></span>
+        <span><i style="background:var(--alt-mid)"></i><span data-i18n="idx.mid">&lt; 9.000 m</span></span>
+        <span><i style="background:var(--alt-high)"></i><span data-i18n="idx.high">Crucero</span></span>
       </div>
     </div>
   </section>
 
-  <aside class="side" aria-label="Panel de control">
+  <aside class="side" data-i18n-aria="idx.panelAria" aria-label="Panel de control">
     <div class="hero-count" data-enter>
-      <h1>Aeronaves en el aire</h1>
+      <h1 data-i18n="idx.h1">Aeronaves en el aire</h1>
       <div class="count" id="flight-count">0</div>
-      <p class="count-sub">sobre Latinoamérica, entre 55°&nbsp;S y 15°&nbsp;N</p>
+      <p class="count-sub" data-i18n="idx.sub">sobre Latinoamérica, entre 55° S y 15° N</p>
     </div>
 
     <div class="kpis" data-enter="2">
-      <div class="kpi"><div class="eyebrow">Alt. media</div><div class="kpi-value" id="kpi-alt">—</div></div>
-      <div class="kpi"><div class="eyebrow">País líder</div><div class="kpi-value" id="kpi-pais" style="font-size:18px">—</div></div>
-      <div class="kpi"><div class="eyebrow">Actualizado</div><div class="kpi-value" id="kpi-hora">—</div></div>
+      <div class="kpi"><div class="eyebrow" data-i18n="idx.kAlt">Alt. media</div><div class="kpi-value" id="kpi-alt">—</div></div>
+      <div class="kpi"><div class="eyebrow" data-i18n="idx.kPais">País líder</div><div class="kpi-value" id="kpi-pais" style="font-size:18px">—</div></div>
+      <div class="kpi"><div class="eyebrow" data-i18n="idx.kHora">Actualizado</div><div class="kpi-value" id="kpi-hora">—</div></div>
     </div>
 
     <div class="actions" data-enter="3">
       {% if static_mode %}
       <div class="snapshot">
-        <div class="eyebrow">Instantánea</div>
-        <p>Posiciones capturadas de OpenSky el <b class="mono" data-ts="{{ snapshot }}">{{ snapshot }}</b> y guardadas en MongoDB.</p>
+        <div class="eyebrow" data-i18n="idx.snapEyebrow">Instantánea</div>
+        <p id="snap-text" data-ts="{{ snapshot }}">{{ snapshot }}</p>
       </div>
       {% else %}
       <button id="btn-sync" class="btn btn-primary btn-block" type="button">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-        <span>Actualizar radar</span>
+        <span data-i18n="idx.btn">Actualizar radar</span>
       </button>
-      <p class="hint" id="sync-hint" aria-live="polite">Consulta OpenSky y guarda en Redis y MongoDB.</p>
+      <p class="hint" id="sync-hint" aria-live="polite" data-i18n="idx.hint">Consulta OpenSky y guarda en Redis y MongoDB.</p>
       {% endif %}
     </div>
 
     <div class="list-head">
       <div class="row">
-        <h2 class="eyebrow">Vuelos</h2>
+        <h2 class="eyebrow" data-i18n="idx.flights">Vuelos</h2>
         <span class="eyebrow num" id="list-count"></span>
       </div>
       <div class="field">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <label class="sr-only" for="buscar">Buscar vuelo</label>
-        <input id="buscar" name="buscar" class="input" type="search" placeholder="Vuelo, ICAO o país…" autocomplete="off" spellcheck="false">
+        <label class="sr-only" for="buscar" data-i18n="idx.searchLabel">Buscar vuelo</label>
+        <input id="buscar" name="buscar" class="input" type="search" placeholder="Vuelo, ICAO o país…" data-i18n-placeholder="idx.searchPh" autocomplete="off" spellcheck="false">
       </div>
     </div>
     <ul class="flights" id="lista"></ul>
@@ -139,136 +140,136 @@
 {% endblock %}
 
 {% block scripts_lib %}
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const { esc, fmt, altColor, hace, parseTs, crearMapa, iconoAvion, popupVuelo, getJSON, estado } = Radar;
-  const map = crearMapa('map', [-16, -62], 4);
-  const capa = L.layerGroup().addTo(map);
-  const marcadores = new Map();
+  const { t, esc, fmt, altColor, hace, parseTs, crearMapa, capaAviones, marcarAvion, volarA, popupVuelo, popup, getJSON, estado, animarNumero } = Radar;
+  const $ = (id) => document.getElementById(id);
   let vuelos = [];
+  let porIcao = new Map();
   let seleccionado = null;
   let ultimaCarga = null;
+  let errorCarga = false;
+  const pop = popup();
 
-  const $ = (id) => document.getElementById(id);
-
-  function animarConteo(el, hasta) {
-    const desde = Number(el.dataset.v || 0);
-    el.dataset.v = hasta;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches || desde === hasta) { el.textContent = fmt.int(hasta); return; }
-    const t0 = performance.now(), dur = 700;
-    const paso = (t) => {
-      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
-      el.textContent = fmt.int(Math.round(desde + (hasta - desde) * e));
-      if (k < 1) requestAnimationFrame(paso);
-    };
-    requestAnimationFrame(paso);
-  }
+  const map = crearMapa('map', {
+    onStyle: (m) => { capaAviones(m, vuelos, { onClick: (icao) => seleccionar(icao, false) }); marcarAvion(m, seleccionado); },
+  });
 
   function seleccionar(icao, volar = true) {
-    if (seleccionado) marcadores.get(seleccionado)?.getElement()?.classList.remove('selected');
-    document.querySelectorAll('.flight[aria-pressed="true"]').forEach((b) => b.setAttribute('aria-pressed', 'false'));
     seleccionado = icao;
-    const m = marcadores.get(icao);
-    if (!m) return;
-    m.getElement()?.classList.add('selected');
+    const v = porIcao.get(icao);
+    marcarAvion(map, icao);
+    document.querySelectorAll('.flight[aria-pressed="true"]').forEach((b) => b.setAttribute('aria-pressed', 'false'));
     document.querySelector(`.flight[data-icao="${CSS.escape(icao)}"]`)?.setAttribute('aria-pressed', 'true');
-    if (volar) map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 7), { duration: .8 });
-    m.openPopup();
+    if (!v) return;
+    const ll = [v.longitud, v.latitud];
+    if (volar) volarA(map, ll);
+    pop.setLngLat(ll).setHTML(popupVuelo(v)).addTo(map);
   }
 
   function pintarLista() {
     const q = $('buscar').value.trim().toLowerCase();
     const filtrados = q
-      ? vuelos.filter((v) => `${v.callsign} ${v.icao24} ${v.pais}`.toLowerCase().includes(q))
+      ? vuelos.filter((v) => `${v.callsign} ${v.icao24} ${v.pais} ${I18n.pais(v.pais)}`.toLowerCase().includes(q))
       : vuelos;
-    $('list-count').textContent = q ? `${fmt.int(filtrados.length)} de ${fmt.int(vuelos.length)}` : fmt.int(vuelos.length);
+    $('list-count').textContent = q ? t('idx.of', { a: fmt.int(filtrados.length), b: fmt.int(vuelos.length) }) : fmt.int(vuelos.length);
+    if (errorCarga) {
+      $('lista').innerHTML = `<li class="empty"><strong>${t('idx.noServer')}</strong>${t('idx.noServerTip')}</li>`;
+      return;
+    }
     if (!filtrados.length) {
       $('lista').innerHTML = vuelos.length
-        ? `<li class="empty"><strong>Sin coincidencias</strong>Prueba con otro vuelo, código ICAO o país.</li>`
-        : `<li class="empty"><strong>No hay vuelos en caché</strong>Pulsa “Actualizar radar” para traer el tráfico actual.</li>`;
+        ? `<li class="empty"><strong>${t('idx.noMatch')}</strong>${t('idx.noMatchTip')}</li>`
+        : `<li class="empty"><strong>${t('idx.noCache')}</strong>${t('idx.noCacheTip')}</li>`;
       return;
     }
     $('lista').innerHTML = filtrados.map((v) => {
       const cs = v.callsign !== 'N/A' ? v.callsign : v.icao24.toUpperCase();
       return `<li><button type="button" class="flight" data-icao="${esc(v.icao24)}" aria-pressed="${v.icao24 === seleccionado}">
         <i style="background:${altColor(v.altitud, v.en_tierra)}" aria-hidden="true"></i>
-        <span style="min-width:0"><div class="cs" translate="no">${esc(cs)}</div><div class="pa">${esc(v.pais)}</div></span>
-        <span class="al">${v.altitud ? fmt.int(v.altitud) + ' m' : 'Tierra'}</span>
+        <span style="min-width:0"><div class="cs" translate="no">${esc(cs)}</div><div class="pa">${esc(I18n.pais(v.pais))}</div></span>
+        <span class="al">${v.altitud ? fmt.int(v.altitud) + ' m' : t('ground.short')}</span>
       </button></li>`;
     }).join('');
   }
 
   function pintarKpis() {
-    animarConteo($('flight-count'), vuelos.length);
+    animarNumero($('flight-count'), vuelos.length);
     const enAire = vuelos.filter((v) => v.altitud > 0);
     $('kpi-alt').innerHTML = enAire.length
       ? `${fmt.int(enAire.reduce((a, v) => a + v.altitud, 0) / enAire.length)}<small>m</small>` : '—';
     const porPais = {};
     vuelos.forEach((v) => { porPais[v.pais] = (porPais[v.pais] || 0) + 1; });
     const top = Object.entries(porPais).sort((a, b) => b[1] - a[1])[0];
-    $('kpi-pais').textContent = top ? top[0] : '—';
-    $('kpi-pais').title = top ? `${top[0]}: ${top[1]} vuelos` : '';
-    const ts = vuelos.map((v) => v.timestamp).sort().pop();
-    ultimaCarga = parseTs(ts);
+    $('kpi-pais').textContent = top ? I18n.pais(top[0]) : '—';
+    $('kpi-pais').title = top ? `${I18n.pais(top[0])}: ${t('idx.flightsN', { n: top[1] })}` : '';
+    ultimaCarga = parseTs(vuelos.map((v) => v.timestamp).sort().pop());
     $('kpi-hora').textContent = fmt.hora(ultimaCarga);
+    $('kpi-hora').title = ultimaCarga ? hace(ultimaCarga) : '';
+  }
+
+  function pintarEstado() {
+    if (errorCarga) return estado(t('live.offline'), 'err');
+    estado(vuelos.length ? t(Radar.STATIC ? 'live.snapshot' : 'live.live', { n: fmt.int(vuelos.length) }) : t('live.empty'), vuelos.length ? 'on' : '');
+  }
+
+  function pintarSnapshot() {
+    const el = $('snap-text');
+    if (el) el.innerHTML = t('idx.snapText', { fecha: `<b class="mono">${esc(fmt.fecha(el.dataset.ts))}</b>` });
   }
 
   async function cargar() {
     try {
       const datos = await getJSON('/api/vuelos');
+      errorCarga = false;
       vuelos = datos.filter((v) => v.latitud != null && v.longitud != null)
                     .sort((a, b) => (b.altitud || 0) - (a.altitud || 0));
-      capa.clearLayers();
-      marcadores.clear();
-      vuelos.forEach((v) => {
-        const m = L.marker([v.latitud, v.longitud], { icon: iconoAvion(v), keyboard: false, title: v.callsign })
-          .bindPopup(popupVuelo(v));
-        m.on('click', () => seleccionar(v.icao24, false));
-        m.addTo(capa);
-        marcadores.set(v.icao24, m);
-      });
+      porIcao = new Map(vuelos.map((v) => [v.icao24, v]));
+      if (map.getSource('vuelos')) capaAviones(map, vuelos);  // si no, onStyle la crea con estos datos
       pintarKpis();
-      pintarLista();
-      if (seleccionado && marcadores.has(seleccionado)) marcadores.get(seleccionado).getElement()?.classList.add('selected');
-      estado(vuelos.length ? `${Radar.STATIC ? 'Instantánea' : 'En vivo'} · ${fmt.int(vuelos.length)}` : 'Sin datos en caché', vuelos.length ? 'on' : '');
     } catch (e) {
-      estado('Sin conexión', 'err');
-      $('lista').innerHTML = `<li class="empty"><strong>No se pudo leer el servidor</strong>Comprueba que Flask y Redis estén en marcha.</li>`;
+      errorCarga = true;
     }
+    pintarLista();
+    pintarEstado();
   }
 
   async function actualizar() {
-    const btn = $('btn-sync'), hint = $('sync-hint');
+    const btn = $('btn-sync'), hint = $('sync-hint'), label = btn.querySelector('span');
     btn.disabled = true; btn.classList.add('loading');
-    btn.querySelector('span').textContent = 'Consultando OpenSky…';
-    hint.className = 'hint'; hint.textContent = 'Descargando posiciones actuales…';
+    label.textContent = t('idx.btnLoading');
+    hint.className = 'hint'; hint.textContent = t('idx.downloading');
     try {
       const r = await getJSON('/api/actualizar_vuelos', { method: 'POST' });
       if (r.status !== 'success') throw new Error(r.message);
       await cargar();
-      hint.textContent = r.cached ? `${r.message}.` : `${fmt.int(r.count)} posiciones guardadas en Redis y MongoDB.`;
+      hint.textContent = r.cached ? t('idx.cached', { s: r.espera ?? '…' }) : t('idx.saved', { n: fmt.int(r.count) });
     } catch (e) {
       hint.className = 'hint err';
-      hint.textContent = `${e.message || 'Error desconocido'}. Vuelve a intentarlo en unos segundos.`;
+      hint.textContent = t('idx.error', { msg: e.message || 'Error' });
     } finally {
       btn.disabled = false; btn.classList.remove('loading');
-      btn.querySelector('span').textContent = 'Actualizar radar';
+      label.textContent = t('idx.btn');
     }
   }
 
   $('btn-sync')?.addEventListener('click', actualizar);
-  document.querySelectorAll('[data-ts]').forEach((el) => { el.textContent = fmt.fecha(el.dataset.ts); });
   $('buscar').addEventListener('input', pintarLista);
   $('lista').addEventListener('click', (e) => {
     const b = e.target.closest('.flight');
     if (b) seleccionar(b.dataset.icao);
   });
+  document.addEventListener('langchange', () => {
+    pintarKpis(); pintarLista(); pintarEstado(); pintarSnapshot();
+    if (seleccionado && pop.isOpen()) pop.setHTML(popupVuelo(porIcao.get(seleccionado)));
+  });
+  document.addEventListener('themechange', pintarLista);
 
+  pintarSnapshot();
   cargar();
   if (!Radar.STATIC) setInterval(cargar, 30000);  // refresca desde Redis (lo que capture el ingestor)
-  setInterval(() => { if (ultimaCarga) $('kpi-hora').title = hace(ultimaCarga); }, 10000);
 </script>
 {% endblock %}
