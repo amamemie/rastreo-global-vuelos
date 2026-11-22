@@ -1,139 +1,206 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-static="1">
 <head>
-    <meta charset="UTF-8">
-    <title>Logistics Analytics | Top Países</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
-        .nav-custom { background: #1a1c23; padding: 1rem; margin-bottom: 2rem; }
-        #map-stats { 
-            height: 550px; 
-            border-radius: 15px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
-            border: 1px solid #dee2e6;
-        }
-        .card-stats { border: none; border-radius: 15px; background: white; padding: 25px; height: 100%; }
-        .list-group-item { 
-            transition: all 0.2s; 
-            border-radius: 8px !important; 
-            margin-bottom: 5px; 
-            border: 1px solid transparent;
-            cursor: pointer;
-        }
-        .list-group-item:hover { background-color: #f8f9fa; border-color: #dee2e6; transform: translateX(5px); }
-        /* Clase para resaltar el país seleccionado en la lista */
-        .item-active { border-color: #0d6efd !important; background-color: #e7f1ff !important; font-weight: bold; }
-        .badge-count { border-radius: 8px; padding: 5px 12px; font-weight: bold; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#06080b">
+  <meta name="description" content="Rastreo en tiempo real del tráfico aéreo sobre Latinoamérica con datos de OpenSky Network.">
+  <title>Estadísticas · Radar Latam</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%2306080b' stroke='%23f5a524' stroke-width='1.5'/%3E%3Cpath d='M12 12L12 2A10 10 0 0 1 21 8z' fill='%23f5a524'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://server.arcgisonline.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <link rel="stylesheet" href="static/css/app.css">
+  
+<style>
+  .summary { margin-bottom: 20px; }
+  .summary .kpi { padding: 20px 24px; }
+  .summary .kpi-value { font-size: 36px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 20px; }
+  .map-panel { overflow: hidden; display: flex; flex-direction: column; }
+  .map-panel .map { height: 560px; }
+  .rank { list-style: none; margin: 0; padding: 8px; counter-reset: r; }
+  .rank button {
+    width: 100%;
+    display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
+    padding: 12px; border: 0; border-radius: var(--r-sm); background: none;
+    text-align: left; cursor: pointer;
+    transition: background-color .12s var(--ease);
+  }
+  .rank button:hover { background: var(--surface-2); }
+  .rank button[aria-pressed="true"] { background: var(--accent-soft); }
+  .rank .pos { font: 600 13px/1 var(--font-mono); color: var(--ink-3); }
+  .rank .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rank .val { font: 500 14px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+  .rank .val small { color: var(--ink-3); margin-left: 6px; }
+  .bar { grid-column: 2 / 4; height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+  .bar span {
+    display: block; height: 100%; border-radius: 2px; background: var(--ink-3);
+    transform-origin: left; animation: grow .8s var(--ease) both;
+    transition: background-color .15s var(--ease);
+  }
+  .rank li:first-child .bar span, .rank button[aria-pressed="true"] .bar span { background: var(--accent); }
+  .rank button:hover .bar span { background: var(--ink-2); }
+  @keyframes grow { from { transform: scaleX(0); } }
+
+  .bubble-label {
+    background: none; border: 0; box-shadow: none; padding: 0;
+    font: 600 11px/1 var(--font-mono); color: var(--ink);
+    text-shadow: 0 0 4px #000, 0 0 2px #000;
+  }
+  .bubble-label::before { display: none; }
+
+  @media (max-width: 1040px) {
+    .grid { grid-template-columns: 1fr; }
+    .map-panel .map { height: 420px; }
+  }
+  @media (max-width: 600px) {
+    .summary .kpis { grid-template-columns: 1fr; }
+    .summary .kpi + .kpi { border-left: 0; border-top: 1px solid var(--line); }
+    .summary .kpi-value { font-size: 28px; }
+  }
+</style>
+
 </head>
 <body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
 
-    <nav class="nav-custom text-white shadow-sm">
-        <div class="container d-flex justify-content-between align-items-center">
-            <span class="fs-4 fw-bold">✈️ Logistics<span class="text-primary">Analytics</span></span>
-            <div class="d-flex gap-2">
-                <a href="/" class="btn btn-primary btn-sm">📡 Radar en Vivo</a>
-                <a href="historial.html" class="btn btn-outline-light btn-sm">📋 Historial</a>
-            </div>
-        </div>
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="Radar Latam, inicio">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10.5" stroke="#2a3440"/>
+        <circle cx="12" cy="12" r="6" stroke="#2a3440"/>
+        <g class="sweep"><path d="M12 12L12 1.5A10.5 10.5 0 0 1 21.1 6.75z" fill="url(#sw)"/></g>
+        <circle cx="12" cy="12" r="1.6" fill="#f5a524"/>
+        <defs><linearGradient id="sw" x1="12" y1="2" x2="20" y2="8" gradientUnits="userSpaceOnUse"><stop stop-color="#f5a524" stop-opacity=".9"/><stop offset="1" stop-color="#f5a524" stop-opacity="0"/></linearGradient></defs>
+      </svg>
+      Radar <span>Latam</span>
+    </a>
+    
+    <nav class="nav" aria-label="Secciones">
+      <a href="index.html" >Radar en vivo</a>
+      <a href="filtro_paises.html" >Por país</a>
+      <a href="estadisticas.html" aria-current="page">Estadísticas</a>
+      <a href="historial.html" >Historial</a>
     </nav>
-
-    <div class="container pb-5">
-        <div class="row g-4">
-            <div class="col-lg-8">
-                <div class="card-stats shadow-sm">
-                    <h5 class="fw-bold mb-3">Localización por País</h5>
-                    <div id="map-stats"></div>
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="card-stats shadow-sm">
-                    <h5 class="fw-bold mb-4">Top 10 Orígenes</h5>
-                    <p class="text-muted small">Haz clic en un país para localizarlo en el mapa.</p>
-                    <div id="lista-paises" class="list-group list-group-flush">
-                        <div class="text-center py-4 text-muted small">Cargando datos...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="live" aria-live="polite">
+      <span id="live-dot" class="dot" aria-hidden="true"></span>
+      <span id="live-text">Conectando…</span>
     </div>
+  </header>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        const map = L.map('map-stats').setView([-10, -55], 3);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        
-        // Capa para los marcadores (limpiar antes de mostrar uno nuevo)
-        const markerGroup = L.layerGroup().addTo(map);
+  
+<main id="main" class="page">
+  <div class="page-head" data-enter>
+    <div>
+      <div class="eyebrow">Histórico en MongoDB</div>
+      <h1>Estadísticas por país</h1>
+      <p>Qué países registran más aeronaves en el espacio aéreo latinoamericano, según todas las capturas guardadas.</p>
+    </div>
+  </div>
 
-        // Paleta de colores distintos para cada país
-        const colores = [
-            '#FF5733', '#33FF57', '#3357FF', '#F333FF', '#FF33A1', 
-            '#33FFF5', '#F5FF33', '#FF8C33', '#8C33FF', '#33FF8C'
-        ];
+  <section class="panel summary" aria-label="Resumen" data-enter="2">
+    <div class="kpis">
+      <div class="kpi"><div class="eyebrow">Posiciones registradas</div><div class="kpi-value" id="k-reg">—</div></div>
+      <div class="kpi"><div class="eyebrow">Países de matrícula</div><div class="kpi-value" id="k-pai">—</div></div>
+      <div class="kpi"><div class="eyebrow">Última captura</div><div class="kpi-value" id="k-ult" style="font-size:24px">—</div></div>
+    </div>
+  </section>
 
-        async function cargarAnalytics() {
-            try {
-                const response = await fetch('/api/top_paises');
-                const data = await response.json();
-                const lista = document.getElementById('lista-paises');
-                
-                lista.innerHTML = ''; 
+  <div class="grid" data-enter="3">
+    <section class="panel map-panel" aria-labelledby="t-mapa">
+      <div class="panel-head"><h2 id="t-mapa">Posición media por país</h2><span class="eyebrow">Tamaño = registros</span></div>
+      <div id="map-stats" class="map"></div>
+    </section>
 
-                if (data.length === 0) {
-                    lista.innerHTML = '<div class="alert alert-info">Sin datos.</div>';
-                    return;
-                }
+    <section class="panel" aria-labelledby="t-rank">
+      <div class="panel-head"><h2 id="t-rank">Top 10 países</h2><span class="eyebrow">Selecciona uno</span></div>
+      <ol class="rank" id="lista-paises"><li class="empty">Cargando datos…</li></ol>
+    </section>
+  </div>
+</main>
 
-                data.forEach((p, index) => {
-                    const colorPais = colores[index % colores.length];
-                    
-                    // Crear el elemento de la lista
-                    const item = document.createElement('div');
-                    item.className = 'list-group-item d-flex justify-content-between align-items-center px-3';
-                    item.innerHTML = `
-                        <span>🌍 ${p._id || 'Desconocido'}</span>
-                        <span class="badge-count" style="background-color: ${colorPais}22; color: ${colorPais}">${p.total}</span>
-                    `;
 
-                    // EVENTO: Mostrar en mapa al seleccionar
-                    item.onclick = () => {
-                        // 1. Limpiar mapa y selección previa
-                        markerGroup.clearLayers();
-                        document.querySelectorAll('.list-group-item').forEach(i => i.classList.remove('item-active'));
-                        
-                        // 2. Resaltar item actual
-                        item.classList.add('item-active');
+  
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-                        // 3. Dibujar círculo en el mapa
-                        if (p.lat && p.lon) {
-                            const radius = Math.max(10, Math.sqrt(p.total) * 4);
-                            const circle = L.circleMarker([p.lat, p.lon], {
-                                radius: radius,
-                                color: colorPais,
-                                fillColor: colorPais,
-                                fillOpacity: 0.6,
-                                weight: 3
-                            }).addTo(markerGroup);
+  <script src="static/js/common.js"></script>
+  
+<script>
+  const { esc, fmt, parseTs, hace, crearMapa, getJSON, estado } = Radar;
+  const map = crearMapa('map-stats', [-12, -60], 3);
+  const capa = L.layerGroup().addTo(map);
+  const burbujas = [];
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  const neutro = '#a3aeba';
 
-                            circle.bindPopup(`<b>${p._id}</b><br>Registros: ${p.total}`).openPopup();
-                            
-                            // Centrar mapa suavemente
-                            map.flyTo([p.lat, p.lon], 4);
-                        }
-                    };
+  function marcar(i) {
+    document.querySelectorAll('.rank button').forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
+    burbujas.forEach((c, j) => c.setStyle(j === i
+      ? { color: accent, fillColor: accent, fillOpacity: .45, weight: 2 }
+      : { color: neutro, fillColor: neutro, fillOpacity: .12, weight: 1 }));
+    const c = burbujas[i];
+    if (c) { map.flyTo(c.getLatLng(), 5, { duration: .8 }); c.openPopup(); }
+  }
 
-                    lista.appendChild(item);
-                });
-            } catch (error) {
-                console.error("Error:", error);
-            }
-        }
+  async function cargar() {
+    try {
+      const [resumen, top] = await Promise.all([getJSON('/api/resumen'), getJSON('/api/top_paises')]);
+      document.getElementById('k-reg').textContent = fmt.int(resumen.registros);
+      document.getElementById('k-pai').textContent = fmt.int(resumen.paises);
+      const ult = parseTs(resumen.ultimo);
+      document.getElementById('k-ult').textContent = ult ? hace(ult) : 'Nunca';
+      document.getElementById('k-ult').title = fmt.fecha(resumen.ultimo);
+      estado(`${fmt.int(resumen.registros)} registros`, resumen.registros ? 'on' : '');
 
-        cargarAnalytics();
-    </script>
+      const lista = document.getElementById('lista-paises');
+      if (!top.length) {
+        lista.innerHTML = '<li class="empty"><strong>Aún no hay registros</strong>Actualiza el radar para empezar a acumular histórico.</li>';
+        return;
+      }
+      const max = top[0].total;
+      const total = top.reduce((a, p) => a + p.total, 0);
+      lista.innerHTML = top.map((p, i) => `
+        <li><button type="button" data-i="${i}" aria-pressed="false">
+          <span class="pos">${String(i + 1).padStart(2, '0')}</span>
+          <span class="name">${esc(p._id || 'Desconocido')}</span>
+          <span class="val">${fmt.int(p.total)}<small>${p.total / total < .01 ? '&lt;1' : Math.round(p.total / total * 100)}%</small></span>
+          <span class="bar" aria-hidden="true"><span style="width:${(p.total / max * 100).toFixed(1)}%;animation-delay:${i * 40}ms"></span></span>
+        </button></li>`).join('');
+
+      capa.clearLayers(); burbujas.length = 0;
+      top.forEach((p, i) => {
+        if (p.lat == null || p.lon == null) { burbujas.push(null); return; }
+        const r = 8 + Math.sqrt(p.total / max) * 34;
+        const c = L.circleMarker([p.lat, p.lon], {
+          radius: r,
+          color: i === 0 ? accent : neutro, fillColor: i === 0 ? accent : neutro,
+          fillOpacity: i === 0 ? .35 : .12, weight: i === 0 ? 2 : 1,
+        }).bindPopup(`<div class="pop-title">${esc(p._id)}</div><div class="pop-sub">${fmt.int(p.total)} registros</div>`)
+          .bindTooltip(esc(p._id), { permanent: i < 3, direction: 'center', className: 'bubble-label' })
+          .on('click', () => marcar(i))
+          .addTo(capa);
+        burbujas.push(c);
+      });
+      const pts = burbujas.filter(Boolean).map((c) => c.getLatLng());
+      if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 5 });
+    } catch (e) {
+      estado('Sin conexión', 'err');
+      document.getElementById('lista-paises').innerHTML = '<li class="empty"><strong>No se pudo leer MongoDB</strong>Comprueba que el contenedor esté en marcha.</li>';
+    }
+  }
+
+  document.getElementById('lista-paises').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-i]');
+    if (b) marcar(Number(b.dataset.i));
+  });
+  cargar();
+</script>
+
 </body>
 </html>

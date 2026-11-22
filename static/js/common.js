@@ -83,8 +83,18 @@ const Radar = (() => {
       </dl>`;
   }
 
+  // Modo estático (GitHub Pages): las rutas de la API se leen de archivos JSON exportados
+  const STATIC = document.documentElement.dataset.static === '1';
+  const slug = (t) => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  function rutaEstatica(url) {
+    const u = new URL(url, location.href);
+    const fin = u.pathname.split('/').pop();
+    if (fin === 'vuelos_por_pais') return `data/paises/${slug(u.searchParams.get('pais') || '')}.json`;
+    return `data/${fin}.json`;
+  }
+
   async function getJSON(url, opts) {
-    const r = await fetch(url, opts);
+    const r = await fetch(STATIC ? rutaEstatica(url) : url, STATIC ? undefined : opts);
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.message || `Error ${r.status}`);
     return data;
@@ -99,5 +109,5 @@ const Radar = (() => {
     txt.textContent = texto;
   }
 
-  return { esc, fmt, altColor, parseTs, hace, crearMapa, iconoAvion, popupVuelo, getJSON, estado };
+  return { STATIC, esc, fmt, altColor, parseTs, hace, crearMapa, iconoAvion, popupVuelo, getJSON, estado };
 })();

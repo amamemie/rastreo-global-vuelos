@@ -1,104 +1,154 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-static="1">
 <head>
-    <meta charset="UTF-8">
-    <title>Historial de Vuelos | MongoDB</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        :root { --bg: #f4f7f6; }
-        body { background-color: var(--bg); font-family: 'Segoe UI', sans-serif; }
-        .table-container { 
-            background: white; 
-            border-radius: 15px; 
-            padding: 30px; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08); 
-            margin-top: 2rem;
-        }
-        .icao-badge { 
-            background: #e7f1ff; 
-            color: #0d6efd; 
-            font-family: monospace; 
-            padding: 4px 8px; 
-            border-radius: 6px; 
-            font-weight: bold;
-        }
-        .navbar-custom { background: #1a1c23; padding: 1rem; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#06080b">
+  <meta name="description" content="Rastreo en tiempo real del tráfico aéreo sobre Latinoamérica con datos de OpenSky Network.">
+  <title>Historial · Radar Latam</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%2306080b' stroke='%23f5a524' stroke-width='1.5'/%3E%3Cpath d='M12 12L12 2A10 10 0 0 1 21 8z' fill='%23f5a524'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://server.arcgisonline.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="static/css/app.css">
+  
+<style>
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .tools .field { width: 280px; }
+  .hist .table-wrap { max-height: calc(100dvh - 300px); min-height: 320px; }
+  .foot { padding: 12px 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  @media (max-width: 600px) {
+    .tools, .tools .field { width: 100%; }
+    .tools .btn { flex: 1; }
+    .hist .table-wrap { max-height: none; }
+  }
+</style>
+
 </head>
 <body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
 
-<nav class="navbar-custom shadow-sm mb-4">
-    <div class="container d-flex justify-content-between align-items-center">
-        <span class="text-white fs-4 fw-bold">✈️ Logistics<span class="text-primary">History</span></span>
-        <a href="/" class="btn btn-outline-light btn-sm">📡 Volver al Radar</a>
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="Radar Latam, inicio">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10.5" stroke="#2a3440"/>
+        <circle cx="12" cy="12" r="6" stroke="#2a3440"/>
+        <g class="sweep"><path d="M12 12L12 1.5A10.5 10.5 0 0 1 21.1 6.75z" fill="url(#sw)"/></g>
+        <circle cx="12" cy="12" r="1.6" fill="#f5a524"/>
+        <defs><linearGradient id="sw" x1="12" y1="2" x2="20" y2="8" gradientUnits="userSpaceOnUse"><stop stop-color="#f5a524" stop-opacity=".9"/><stop offset="1" stop-color="#f5a524" stop-opacity="0"/></linearGradient></defs>
+      </svg>
+      Radar <span>Latam</span>
+    </a>
+    
+    <nav class="nav" aria-label="Secciones">
+      <a href="index.html" >Radar en vivo</a>
+      <a href="filtro_paises.html" >Por país</a>
+      <a href="estadisticas.html" >Estadísticas</a>
+      <a href="historial.html" aria-current="page">Historial</a>
+    </nav>
+    <div class="live" aria-live="polite">
+      <span id="live-dot" class="dot" aria-hidden="true"></span>
+      <span id="live-text">Conectando…</span>
     </div>
-</nav>
+  </header>
 
-<div class="container">
-    <div class="table-container">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h3 class="fw-bold m-0">📋 Registros Históricos</h3>
-                <p class="text-muted small m-0">Mostrando los últimos 100 vuelos detectados en MongoDB</p>
-            </div>
-            <button onclick="cargarHistorial()" class="btn btn-primary btn-sm">🔄 Refrescar Tabla</button>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th>Fecha y Hora</th>
-                        <th>ICAO24</th>
-                        <th>Callsign (Vuelo)</th>
-                        <th>País de Origen</th>
-                        <th>Altitud</th>
-                    </tr>
-                </thead>
-                <tbody id="tabla-cuerpo">
-                    <tr>
-                        <td colspan="5" class="text-center py-5">
-                            <div class="spinner-border text-primary" role="status"></div>
-                            <br><span class="text-muted mt-2 d-block">Consultando base de datos...</span>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+  
+<main id="main" class="page">
+  <div class="page-head" data-enter>
+    <div>
+      <div class="eyebrow">MongoDB · historico_vuelos</div>
+      <h1>Historial de posiciones</h1>
+      <p>Las 100 posiciones más recientes guardadas en la base de datos.</p>
     </div>
-</div>
+    <div class="tools">
+      <div class="field">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <label class="sr-only" for="filtro">Filtrar registros</label>
+        <input id="filtro" name="filtro" class="input" type="search" placeholder="Filtrar por vuelo o país…" autocomplete="off" spellcheck="false">
+      </div>
+      <button id="btn-refresh" class="btn" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        Refrescar
+      </button>
+    </div>
+  </div>
 
+  <section class="panel hist" aria-label="Registros" data-enter="2">
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">Fecha y hora</th>
+            <th scope="col">ICAO24</th>
+            <th scope="col">Vuelo</th>
+            <th scope="col">País de matrícula</th>
+            <th scope="col" class="r">Altitud</th>
+            <th scope="col" class="r">Velocidad</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-cuerpo">
+          <tr><td colspan="6"><div class="empty">Consultando la base de datos…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="foot" aria-live="polite"><span id="foot-l"></span><span id="foot-r"></span></div>
+  </section>
+</main>
+
+
+  
+  <script src="static/js/common.js"></script>
+  
 <script>
-    async function cargarHistorial() {
-        const tbody = document.getElementById('tabla-cuerpo');
-        
-        try {
-            const response = await fetch('/api/historial_datos');
-            const datos = await response.json();
+  const { esc, fmt, altColor, getJSON, estado } = Radar;
+  let datos = [];
 
-            if (datos.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay datos registrados aún. Presiona "Actualizar" en el Radar.</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = datos.map(v => `
-                <tr>
-                    <td class="text-muted small">${v.timestamp}</td>
-                    <td><span class="icao-badge">${v.icao24}</span></td>
-                    <td class="fw-bold">${v.callsign}</td>
-                    <td>🌍 ${v.pais}</td>
-                    <td>${v.altitud.toLocaleString()} m</td>
-                </tr>
-            `).join('');
-
-        } catch (error) {
-            console.error("Error:", error);
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Error al conectar con el servidor.</td></tr>';
-        }
+  function pintar() {
+    const q = document.getElementById('filtro').value.trim().toLowerCase();
+    const filas = q ? datos.filter((v) => `${v.callsign} ${v.icao24} ${v.pais}`.toLowerCase().includes(q)) : datos;
+    const tbody = document.getElementById('tabla-cuerpo');
+    document.getElementById('foot-l').textContent = q
+      ? `${fmt.int(filas.length)} de ${fmt.int(datos.length)} registros`
+      : `${fmt.int(datos.length)} registros`;
+    if (!filas.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty">${datos.length
+        ? '<strong>Sin coincidencias</strong>Prueba con otro vuelo o país.'
+        : '<strong>Aún no hay registros</strong>Ve al Radar en vivo y pulsa “Actualizar radar”.'}</div></td></tr>`;
+      return;
     }
+    tbody.innerHTML = filas.map((v) => `
+      <tr>
+        <td class="mono muted">${fmt.fecha(v.timestamp)}</td>
+        <td><span class="tag" translate="no">${esc(v.icao24)}</span></td>
+        <td class="mono" style="font-weight:600" translate="no">${esc(v.callsign)}</td>
+        <td>${esc(v.pais)}</td>
+        <td class="r mono"><span class="alt-pill">${fmt.alt(v.altitud)}<i style="background:${altColor(v.altitud, v.en_tierra)}" aria-hidden="true"></i></span></td>
+        <td class="r mono muted">${fmt.vel(v.velocidad)}</td>
+      </tr>`).join('');
+  }
 
-    // Carga inicial al abrir la página
-    cargarHistorial();
+  async function cargar() {
+    const btn = document.getElementById('btn-refresh');
+    btn.disabled = true; btn.classList.add('loading');
+    try {
+      datos = await getJSON('/api/historial_datos');
+      pintar();
+      document.getElementById('foot-r').textContent = `Leído ${fmt.hora(new Date())}`;
+      estado(`${fmt.int(datos.length)} registros`, datos.length ? 'on' : '');
+    } catch (e) {
+      estado('Sin conexión', 'err');
+      document.getElementById('tabla-cuerpo').innerHTML = '<tr><td colspan="6"><div class="empty"><strong>No se pudo leer MongoDB</strong>Comprueba que el contenedor esté en marcha y refresca.</div></td></tr>';
+    } finally {
+      btn.disabled = false; btn.classList.remove('loading');
+    }
+  }
+
+  document.getElementById('btn-refresh').addEventListener('click', cargar);
+  document.getElementById('filtro').addEventListener('input', pintar);
+  cargar();
 </script>
 
 </body>

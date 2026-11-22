@@ -1,22 +1,16 @@
 from flask import Flask, render_template, jsonify, request
-from pymongo import MongoClient
-import redis
 import json
 import datetime
+import os
 import opensky
 
 app = Flask(__name__)
 
 # --- CONEXIONES ---
-try:
-    mongo_client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=2000)
-    db = mongo_client['rastreo_logistica']
-    vuelos_db = db['historico_vuelos']
-    
-    cache = redis.StrictRedis(host='localhost', port=6379, db=1, decode_responses=True)
-    print("✅ Conexión exitosa a MongoDB y Redis")
-except Exception as e:
-    print(f"❌ Error de conexión: {e}")
+from database import vuelos_historial as vuelos_db, redis_client as cache
+
+# Tiempo mínimo entre consultas a OpenSky, para que los visitantes no agoten la cuota
+INTERVALO_MIN = int(os.environ.get('INTERVALO_MIN_ACTUALIZAR', '60'))
 
 # --- RUTAS DE NAVEGACIÓN ---
 @app.route('/')
@@ -39,6 +33,11 @@ def view_filtro(): return render_template('filtro_paises.html')
 
 @app.route('/api/actualizar_vuelos', methods=['POST'])
 def actualizar_vuelos():
+    if not cache.set('lock:actualizar', '1', nx=True, ex=INTERVALO_MIN):
+        espera = cache.ttl('lock:actualizar')
+        en_cache = sum(1 for _ in cache.scan_iter("vuelo_live:*"))
+        return jsonify({"status": "success", "count": en_cache, "cached": True,
+                        "message": f"Datos recientes; nueva consulta disponible en {espera}s"})
     try:
         estados = opensky.obtener_estados()
         if not estados:
@@ -52,6 +51,7 @@ def actualizar_vuelos():
         vuelos_db.insert_many([v.copy() for v in vuelos])
         return jsonify({"status": "success", "count": len(vuelos)})
     except Exception as e:
+        cache.delete('lock:actualizar')
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/vuelos')
@@ -109,4 +109,4 @@ def get_rutas_por_pais():
     return jsonify(list(vuelos_db.aggregate(pipeline)))
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=os.environ.get('FLASK_DEBUG', '1') == '1', host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

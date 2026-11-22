@@ -44,6 +44,8 @@
   .actions { padding: 16px 20px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
   .actions .hint { font-size: 12.5px; color: var(--ink-3); }
   .actions .hint.err { color: var(--err); }
+  .snapshot { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line-strong); border-left: 2px solid var(--accent); border-radius: var(--r-sm); background: var(--surface-2); font-size: 13.5px; color: var(--ink-2); }
+  .snapshot b { color: var(--ink); font-weight: 500; }
 
   .list-head { padding: 16px 20px 12px; display: grid; gap: 12px; }
   .list-head .row { display: flex; justify-content: space-between; align-items: baseline; }
@@ -106,11 +108,18 @@
     </div>
 
     <div class="actions" data-enter="3">
+      {% if static_mode %}
+      <div class="snapshot">
+        <div class="eyebrow">Instantánea</div>
+        <p>Posiciones capturadas de OpenSky el <b class="mono" data-ts="{{ snapshot }}">{{ snapshot }}</b> y guardadas en MongoDB.</p>
+      </div>
+      {% else %}
       <button id="btn-sync" class="btn btn-primary btn-block" type="button">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
         <span>Actualizar radar</span>
       </button>
       <p class="hint" id="sync-hint" aria-live="polite">Consulta OpenSky y guarda en Redis y MongoDB.</p>
+      {% endif %}
     </div>
 
     <div class="list-head">
@@ -224,7 +233,7 @@
       pintarKpis();
       pintarLista();
       if (seleccionado && marcadores.has(seleccionado)) marcadores.get(seleccionado).getElement()?.classList.add('selected');
-      estado(vuelos.length ? `En vivo · ${fmt.int(vuelos.length)}` : 'Sin datos en caché', vuelos.length ? 'on' : '');
+      estado(vuelos.length ? `${Radar.STATIC ? 'Instantánea' : 'En vivo'} · ${fmt.int(vuelos.length)}` : 'Sin datos en caché', vuelos.length ? 'on' : '');
     } catch (e) {
       estado('Sin conexión', 'err');
       $('lista').innerHTML = `<li class="empty"><strong>No se pudo leer el servidor</strong>Comprueba que Flask y Redis estén en marcha.</li>`;
@@ -240,7 +249,7 @@
       const r = await getJSON('/api/actualizar_vuelos', { method: 'POST' });
       if (r.status !== 'success') throw new Error(r.message);
       await cargar();
-      hint.textContent = `${fmt.int(r.count)} posiciones guardadas en Redis y MongoDB.`;
+      hint.textContent = r.cached ? `${r.message}.` : `${fmt.int(r.count)} posiciones guardadas en Redis y MongoDB.`;
     } catch (e) {
       hint.className = 'hint err';
       hint.textContent = `${e.message || 'Error desconocido'}. Vuelve a intentarlo en unos segundos.`;
@@ -250,7 +259,8 @@
     }
   }
 
-  $('btn-sync').addEventListener('click', actualizar);
+  $('btn-sync')?.addEventListener('click', actualizar);
+  document.querySelectorAll('[data-ts]').forEach((el) => { el.textContent = fmt.fecha(el.dataset.ts); });
   $('buscar').addEventListener('input', pintarLista);
   $('lista').addEventListener('click', (e) => {
     const b = e.target.closest('.flight');
@@ -258,7 +268,7 @@
   });
 
   cargar();
-  setInterval(cargar, 30000);  // refresca desde Redis (lo que capture el ingestor)
+  if (!Radar.STATIC) setInterval(cargar, 30000);  // refresca desde Redis (lo que capture el ingestor)
   setInterval(() => { if (ultimaCarga) $('kpi-hora').title = hace(ultimaCarga); }, 10000);
 </script>
 {% endblock %}
