@@ -1,100 +1,138 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Logistics Tracker | Filtro por País</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        body { background-color: #f4f7f6; font-family: 'Inter', sans-serif; }
-        .nav-custom { background: #1a1c23; padding: 1rem; color: white; }
-        #map { height: 600px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
-        .filter-card { background: white; border-radius: 15px; padding: 20px; border: none; }
-    </style>
-</head>
-<body>
-    <nav class="nav-custom mb-4">
-        <div class="container d-flex justify-content-between">
-            <span class="fs-4">✈️ Radar <span class="text-primary">Regional</span></span>
-            <a href="/estadisticas" class="btn btn-outline-light btn-sm">Ver Estadísticas</a>
-        </div>
-    </nav>
+{% extends "base.html" %}
+{% set active = 'filtro' %}
+{% block title %}Por país · Radar Latam{% endblock %}
 
-    <div class="container">
-        <div class="row g-4">
-            <div class="col-md-3">
-                <div class="filter-card shadow-sm">
-                    <label class="form-label fw-bold">Seleccionar País:</label>
-                    <select id="selector-pais" class="form-select mb-3" onchange="filtrarVuelos()">
-                        <option value="todos">Todos los países</option>
-                        <!-- Se llena dinámicamente -->
-                    </select>
-                    <div id="info-filtro" class="text-muted small">
-                        Cargando países activos...
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-9">
-                <div id="map"></div>
-            </div>
-        </div>
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
+{% block styles %}
+<style>
+  .split {
+    display: grid; grid-template-columns: 360px minmax(0, 1fr);
+    height: calc(100dvh - var(--topbar-h));
+  }
+  .side {
+    display: flex; flex-direction: column; min-height: 0;
+    background: var(--surface); border-right: 1px solid var(--line);
+  }
+  .side-top { padding: 24px 20px 20px; border-bottom: 1px solid var(--line); display: grid; gap: 14px; }
+  .side-top h1 { font: 700 30px/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+  .side-top label { display: block; margin-bottom: 8px; }
+  .result { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 10px; }
+  .result b { font: 700 40px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .result span { color: var(--ink-2); font-size: 14px; }
+  .items { list-style: none; margin: 0; padding: 8px; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; }
+  .items li { content-visibility: auto; contain-intrinsic-size: auto 52px; }
+  .item {
+    width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px;
+    padding: 10px 12px; border: 0; border-radius: var(--r-sm); background: none; text-align: left; cursor: pointer;
+    transition: background-color .12s var(--ease);
+  }
+  .item:hover { background: var(--surface-2); }
+  .item .cs { font: 600 14px/1.2 var(--font-mono); }
+  .item .al { font: 500 13px/1.2 var(--font-mono); color: var(--ink-2); text-align: right; }
+  .item .ts { grid-column: 1 / 3; font-size: 12px; color: var(--ink-3); }
+  .map-wrap { min-height: 0; }
+
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; height: auto; }
+    .map-wrap { height: 60dvh; order: -1; }
+    .side { border-right: 0; border-top: 1px solid var(--line); }
+    .items { max-height: 50dvh; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main id="main" class="split">
+  <aside class="side" aria-label="Filtro">
+    <div class="side-top" data-enter>
+      <div>
+        <div class="eyebrow">Histórico en MongoDB</div>
+        <h1 style="margin-top:6px">Vuelos por país</h1>
+      </div>
+      <div>
+        <label class="eyebrow" for="selector-pais">País de matrícula</label>
+        <select id="selector-pais" name="pais" class="select">
+          <option value="todos">Todos los países</option>
+        </select>
+      </div>
     </div>
+    <div class="result" aria-live="polite" data-enter="2"><b id="res-n">—</b><span id="res-t">registros recientes</span></div>
+    <ul class="items" id="items"></ul>
+  </aside>
+  <section class="map-wrap" aria-label="Mapa de registros"><div id="map" class="map"></div></section>
+</main>
+{% endblock %}
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% block scripts_lib %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+
+{% block scripts %}
 <script>
-    const map = L.map('map').setView([-15, -60], 4);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    const markersGroup = L.layerGroup().addTo(map);
+  const { esc, fmt, crearMapa, iconoAvion, popupVuelo, getJSON, estado } = Radar;
+  const map = crearMapa('map', [-15, -60], 4);
+  const capa = L.layerGroup().addTo(map);
+  const sel = document.getElementById('selector-pais');
+  let marcadores = [];
 
-    // 1. Cargamos los países disponibles desde el historial de la BD al iniciar
-    async function cargarListaPaises() {
-        try {
-            const response = await fetch('/api/top_paises'); // Usamos este endpoint para ver qué países tienen datos
-            const datosPaises = await response.json();
-            const selector = document.getElementById('selector-pais');
-            
-            datosPaises.forEach(p => {
-                const option = document.createElement('option');
-                option.value = p._id; // El nombre del país
-                option.textContent = `${p._id} (${p.total} registros)`;
-                selector.appendChild(option);
-            });
-            document.getElementById('info-filtro').innerText = "Países cargados desde la base de datos.";
-        } catch (e) { console.error("Error cargando lista:", e); }
+  async function cargarPaises() {
+    try {
+      const paises = await getJSON('/api/top_paises');
+      paises.forEach((p) => {
+        const o = document.createElement('option');
+        o.value = p._id;
+        o.textContent = `${p._id} · ${fmt.int(p.total)}`;
+        sel.appendChild(o);
+      });
+    } catch (e) { /* el filtro sigue funcionando con "todos" */ }
+    const inicial = new URLSearchParams(location.search).get('pais');
+    if (inicial && [...sel.options].some((o) => o.value === inicial)) sel.value = inicial;
+  }
+
+  async function filtrar() {
+    const pais = sel.value;
+    const url = new URL(location);
+    pais === 'todos' ? url.searchParams.delete('pais') : url.searchParams.set('pais', pais);
+    history.replaceState(null, '', url);
+
+    capa.clearLayers();
+    try {
+      const vuelos = await getJSON(pais === 'todos' ? '/api/historial_datos' : `/api/vuelos_por_pais?pais=${encodeURIComponent(pais)}`);
+      const conPos = vuelos.filter((v) => v.latitud != null && v.longitud != null);
+      marcadores = conPos.map((v) => L.marker([v.latitud, v.longitud], { icon: iconoAvion(v, 20), keyboard: false })
+        .bindPopup(popupVuelo(v) + `<div class="pop-sub" style="margin:10px 0 0">${fmt.fecha(v.timestamp)}</div>`)
+        .addTo(capa));
+      document.getElementById('res-n').textContent = fmt.int(vuelos.length);
+      document.getElementById('res-t').textContent = pais === 'todos' ? 'registros recientes, todos los países' : `registros recientes de ${pais}`;
+      estado(`${fmt.int(vuelos.length)} registros`, vuelos.length ? 'on' : '');
+
+      const items = document.getElementById('items');
+      items.innerHTML = conPos.length ? conPos.map((v, i) => `
+        <li><button type="button" class="item" data-i="${i}">
+          <span class="cs" translate="no">${esc(v.callsign)}</span>
+          <span class="al">${fmt.alt(v.altitud)}</span>
+          <span class="ts">${esc(v.pais)} · ${fmt.fecha(v.timestamp)}</span>
+        </button></li>`).join('')
+        : '<li class="empty"><strong>Sin registros</strong>Actualiza el radar para acumular datos.</li>';
+
+      if (marcadores.length) map.fitBounds(L.latLngBounds(marcadores.map((m) => m.getLatLng())), { padding: [40, 40], maxZoom: 7 });
+    } catch (e) {
+      estado('Sin conexión', 'err');
+      document.getElementById('items').innerHTML = '<li class="empty"><strong>No se pudo leer MongoDB</strong>Comprueba que el contenedor esté en marcha.</li>';
     }
+  }
 
-    // 2. Función principal para filtrar consultando a la API de MongoDB
-    async function filtrarVuelos() {
-        const paisSeleccionado = document.getElementById('selector-pais').value;
-        const info = document.getElementById('info-filtro');
-        markersGroup.clearLayers();
-
-        // Si es "todos", usamos el endpoint de historial general, si no, el de filtro por país
-        const url = paisSeleccionado === "todos" 
-            ? '/api/historial_datos' 
-            : `/api/vuelos_por_pais?pais=${encodeURIComponent(paisSeleccionado)}`;
-
-        try {
-            const response = await fetch(url);
-            const vuelos = await response.json();
-
-            vuelos.forEach(v => {
-                if (v.latitud && v.longitud) {
-                    L.marker([v.latitud, v.longitud])
-                     .bindPopup(`<b>${v.callsign}</b><br>País: ${v.pais}<br>Fecha: ${v.timestamp}`)
-                     .addTo(markersGroup);
-                }
-            });
-
-            info.innerHTML = `Encontrados <b>${vuelos.length}</b> registros en la base de datos para <b>${paisSeleccionado}</b>.`;
-        } catch (error) {
-            info.innerHTML = "<span class='text-danger'>Error al conectar con la base de datos.</span>";
-        }
-    }
-
-    // Ejecución inicial
-    cargarListaPaises();
-    filtrarVuelos();
+  document.getElementById('items').addEventListener('click', (e) => {
+    const b = e.target.closest('.item');
+    if (!b) return;
+    const m = marcadores[Number(b.dataset.i)];
+    map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 7), { duration: .8 });
+    m.openPopup();
+  });
+  sel.addEventListener('change', filtrar);
+  cargarPaises().then(filtrar);
 </script>
-</body>
-</html>
+{% endblock %}

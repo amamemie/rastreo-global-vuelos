@@ -1,17 +1,11 @@
 from flask import Flask, render_template, jsonify, request
 from pymongo import MongoClient
 import redis
-import requests
-from requests.auth import HTTPBasicAuth
 import json
 import datetime
+import opensky
 
 app = Flask(__name__)
-
-# --- CONFIGURACIÓN ---
-OPENSKY_USER = 'amamemie-api-client'
-OPENSKY_PASS = 'YhZK6ToMja36DhtELH5PToE2YQXM7KXL'
-LATAM_BOUNDS = {'lamin': -55.0, 'lomin': -90.0, 'lamax': 15.0, 'lomax': -30.0}
 
 # --- CONEXIONES ---
 try:
@@ -26,51 +20,45 @@ except Exception as e:
 
 # --- RUTAS DE NAVEGACIÓN ---
 @app.route('/')
+@app.route('/index.html')
 def index(): return render_template('index.html')
 
 @app.route('/historial')
+@app.route('/historial.html')
 def view_historial(): return render_template('historial.html')
 
 @app.route('/estadisticas')
+@app.route('/estadisticas.html')
 def view_estadisticas(): return render_template('estadisticas.html')
 
 @app.route('/filtro_paises')
+@app.route('/filtro_paises.html')
 def view_filtro(): return render_template('filtro_paises.html')
 
 # --- ENDPOINTS API ---
 
 @app.route('/api/actualizar_vuelos', methods=['POST'])
 def actualizar_vuelos():
-    url = "https://opensky-network.org/api/states/all"
     try:
-        res = requests.get(url, params=LATAM_BOUNDS, auth=HTTPBasicAuth(OPENSKY_USER, OPENSKY_PASS), timeout=20)
-        if res.status_code == 200:
-            data = res.json()
-            conteo = 0
-            if data.get('states'):
-                for s in data['states']:
-                    vuelo = {
-                        'icao24': s[0],
-                        'callsign': s[1].strip() if s[1] else "N/A",
-                        'pais': s[2],
-                        'longitud': s[5],
-                        'latitud': s[6],
-                        'altitud': s[7] if s[7] else 0,
-                        'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    cache.set(f"vuelo_live:{vuelo['icao24']}", json.dumps(vuelo), ex=300)
-                    vuelos_db.insert_one(vuelo.copy())
-                    conteo += 1
-                return jsonify({"status": "success", "count": conteo})
-        return jsonify({"status": "error", "message": "API sin datos"})
+        estados = opensky.obtener_estados()
+        if not estados:
+            return jsonify({"status": "error", "message": "API sin datos"})
+        ahora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        vuelos = [opensky.estado_a_vuelo(s, ahora) for s in estados]
+        pipe = cache.pipeline()
+        for v in vuelos:
+            pipe.set(f"vuelo_live:{v['icao24']}", json.dumps(v), ex=300)
+        pipe.execute()
+        vuelos_db.insert_many([v.copy() for v in vuelos])
+        return jsonify({"status": "success", "count": len(vuelos)})
     except Exception as e:
-        # CORRECCIÓN AQUÍ: str(e) unido
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/vuelos')
 def get_vuelos_live():
-    keys = cache.keys("vuelo_live:*")
-    return jsonify([json.loads(cache.get(k)) for k in keys])
+    keys = list(cache.scan_iter("vuelo_live:*"))
+    valores = cache.mget(keys) if keys else []
+    return jsonify([json.loads(v) for v in valores if v])
 
 @app.route('/api/historial_datos')
 def get_historial():
@@ -80,6 +68,15 @@ def get_historial():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
     
+@app.route('/api/resumen')
+def get_resumen():
+    ultimo = vuelos_db.find_one({}, {"_id": 0, "timestamp": 1}, sort=[("timestamp", -1)])
+    return jsonify({
+        "registros": vuelos_db.estimated_document_count(),
+        "paises": len(vuelos_db.distinct("pais")),
+        "ultimo": ultimo["timestamp"] if ultimo else None,
+    })
+
 @app.route('/api/top_paises')
 def get_top_paises():
     pipeline = [
